@@ -1,3 +1,4 @@
+import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { NotesService } from 'src/notes/services/notes.service';
 import { Actor, createE2EApp, DAY_MS, E2EApp, entryFor } from '../support';
 

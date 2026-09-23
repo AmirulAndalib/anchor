@@ -1,3 +1,4 @@
+import type { AddressInfo } from 'net';
 import { HttpClient, TestServer } from './http';
 import { AttachmentsApi } from './api/attachments.api';
 import { ExportApi } from './api/export.api';
@@ -28,7 +29,7 @@ export class Actor implements TestUser {
 
   constructor(
     server: TestServer,
-    private readonly port: number,
+    private readonly address: AddressInfo,
     private readonly user: TestUser,
     private readonly trackStream: (stream: SyncEventStream) => void,
   ) {
@@ -64,7 +65,7 @@ export class Actor implements TestUser {
 
   /** Closed for you by `ctx.closeEventStreams()`. */
   async openEventStream(): Promise<SyncEventStream> {
-    const stream = await openSyncEventStream(this.port, this.user.token);
+    const stream = await openSyncEventStream(this.address, this.user.token);
     this.trackStream(stream);
     return stream;
   }

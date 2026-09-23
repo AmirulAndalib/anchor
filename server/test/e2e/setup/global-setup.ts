@@ -3,23 +3,21 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import { Client } from 'pg';
-import {
-  PostgreSqlContainer,
-  StartedPostgreSqlContainer,
-} from '@testcontainers/postgresql';
+import { PostgreSqlContainer } from '@testcontainers/postgresql';
+import type { TestProject } from 'vitest/node';
 
 const SERVER_ROOT = path.resolve(__dirname, '..', '..', '..');
 const DATABASE = 'e2e';
 
-declare global {
-  var __E2E_PG_CONTAINER__: StartedPostgreSqlContainer | undefined;
-
-  var __E2E_DATA_DIR__: string | undefined;
+declare module 'vitest' {
+  export interface ProvidedContext {
+    databaseUrl: string;
+    dataDir: string;
+  }
 }
 
-export default async function globalSetup(): Promise<void> {
+export default async function globalSetup(project: TestProject) {
   const container = await new PostgreSqlContainer('postgres:18-alpine').start();
-  globalThis.__E2E_PG_CONTAINER__ = container;
 
   const admin = new Client({ connectionString: container.getConnectionUri() });
   await admin.connect();
@@ -35,9 +33,14 @@ export default async function globalSetup(): Promise<void> {
     env: { ...process.env, DATABASE_URL: databaseUrl },
     stdio: 'pipe',
   });
-  process.env.E2E_DATABASE_URL = databaseUrl;
 
   const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'anchor-e2e-'));
-  globalThis.__E2E_DATA_DIR__ = dataDir;
-  process.env.E2E_DATA_DIR = dataDir;
+
+  project.provide('databaseUrl', databaseUrl);
+  project.provide('dataDir', dataDir);
+
+  return async () => {
+    await container.stop();
+    fs.rmSync(dataDir, { recursive: true, force: true });
+  };
 }

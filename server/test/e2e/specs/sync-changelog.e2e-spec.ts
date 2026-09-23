@@ -1,3 +1,4 @@
+import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { SyncMaintenanceService } from 'src/sync/sync-maintenance.service';
 import { Actor, createE2EApp, E2EApp } from '../support';
 
@@ -245,13 +246,8 @@ describe('sync changelog', () => {
     });
 
     async function ageChangeLog(days: number) {
-      const cutoff = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
-      await ctx.prisma.$executeRawUnsafe(
-        `UPDATE "ChangeLog" SET "updatedAt" = '${cutoff
-          .toISOString()
-          .replace('T', ' ')
-          .replace('Z', '')}'`,
-      );
+      await ctx.prisma.$executeRaw`
+        UPDATE "ChangeLog" SET "updatedAt" = "updatedAt" - make_interval(days => ${days}::int)`;
     }
 
     async function syncState(userId: string) {

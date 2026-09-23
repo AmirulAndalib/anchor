@@ -1,3 +1,13 @@
+import {
+  afterEach,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  type Mock,
+  type MockInstance,
+  vi,
+} from 'vitest';
 import 'reflect-metadata';
 import {
   ArgumentsHost,
@@ -11,9 +21,9 @@ import { GlobalExceptionFilter } from './global-exception.filter';
 
 describe('GlobalExceptionFilter', () => {
   let filter: GlobalExceptionFilter;
-  let reply: jest.Mock;
+  let reply: Mock;
   let response: object;
-  let errorLog: jest.SpyInstance;
+  let errorLog: MockInstance;
 
   const host = {
     switchToHttp: () => ({
@@ -23,16 +33,16 @@ describe('GlobalExceptionFilter', () => {
   } as unknown as ArgumentsHost;
 
   beforeEach(() => {
-    reply = jest.fn();
+    reply = vi.fn();
     response = {};
-    errorLog = jest
+    errorLog = vi
       .spyOn(Logger.prototype, 'error')
       .mockImplementation(() => undefined);
 
     const adapterHost = {
       httpAdapter: {
-        getRequestUrl: jest.fn().mockReturnValue('/api/notes/123'),
-        getRequestMethod: jest.fn().mockReturnValue('GET'),
+        getRequestUrl: vi.fn().mockReturnValue('/api/notes/123'),
+        getRequestMethod: vi.fn().mockReturnValue('GET'),
         reply,
       },
     } as unknown as HttpAdapterHost;
@@ -40,7 +50,7 @@ describe('GlobalExceptionFilter', () => {
     filter = new GlobalExceptionFilter(adapterHost);
   });
 
-  afterEach(() => jest.restoreAllMocks());
+  afterEach(() => vi.restoreAllMocks());
 
   const lastCall = () =>
     reply.mock.calls[0] as [unknown, Record<string, unknown>, number];

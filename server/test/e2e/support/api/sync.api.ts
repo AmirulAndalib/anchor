@@ -1,3 +1,4 @@
+import { expect } from 'vitest';
 import { bodyOf, HttpClient } from '../http';
 import type { SyncEntry, SyncResponse } from '../wire';
 

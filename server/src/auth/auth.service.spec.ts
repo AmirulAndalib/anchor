@@ -1,3 +1,4 @@
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   BadRequestException,
   ConflictException,
@@ -77,17 +78,17 @@ describe('AuthService', () => {
 
   const prisma = {
     user: {
-      findUnique: jest.fn(({ where }: { where: UserWhere }) =>
+      findUnique: vi.fn(({ where }: { where: UserWhere }) =>
         Promise.resolve(findUser(where)),
       ),
-      count: jest.fn(({ where }: { where?: Partial<UserRecord> } = {}) =>
+      count: vi.fn(({ where }: { where?: Partial<UserRecord> } = {}) =>
         Promise.resolve(
           [...users.values()].filter(
             (u) => where?.isAdmin === undefined || u.isAdmin === where.isAdmin,
           ).length,
         ),
       ),
-      create: jest.fn(
+      create: vi.fn(
         ({
           data,
           select,
@@ -111,7 +112,7 @@ describe('AuthService', () => {
           );
         },
       ),
-      update: jest.fn(
+      update: vi.fn(
         ({
           where,
           data,
@@ -126,17 +127,17 @@ describe('AuthService', () => {
       ),
     },
     refreshToken: {
-      findUnique: jest.fn(({ where }: { where: { token: string } }) => {
+      findUnique: vi.fn(({ where }: { where: { token: string } }) => {
         const stored = refreshTokens.get(where.token);
         if (!stored) return Promise.resolve(null);
         return Promise.resolve({ ...stored, user: users.get(stored.userId) });
       }),
-      create: jest.fn(({ data }: { data: Omit<RefreshTokenRecord, 'id'> }) => {
+      create: vi.fn(({ data }: { data: Omit<RefreshTokenRecord, 'id'> }) => {
         const record = { id: `rt-${refreshTokens.size + 1}`, ...data };
         refreshTokens.set(record.token, record);
         return Promise.resolve(record);
       }),
-      deleteMany: jest.fn(
+      deleteMany: vi.fn(
         ({ where }: { where: { token?: string; id?: string } }) => {
           let count = 0;
           for (const [token, record] of refreshTokens) {
@@ -152,11 +153,11 @@ describe('AuthService', () => {
   } as unknown as PrismaService;
 
   const jwtService = {
-    sign: jest.fn(() => 'signed-access-token'),
+    sign: vi.fn(() => 'signed-access-token'),
   } as unknown as JwtService;
 
   const settingsService = {
-    getRegistrationMode: jest.fn(() => Promise.resolve(registrationMode)),
+    getRegistrationMode: vi.fn(() => Promise.resolve(registrationMode)),
   } as unknown as SettingsService;
 
   const storageConfig = {
@@ -176,7 +177,7 @@ describe('AuthService', () => {
       settingsService,
       storageConfig,
     );
-    jest.clearAllMocks();
+    vi.clearAllMocks();
   });
 
   describe('register', () => {

@@ -1,3 +1,4 @@
+import { vi } from 'vitest';
 import { SyncEmitterService } from '../src/sync/sync-emitter.service';
 import { SyncEventsService } from '../src/sync/sync-events.service';
 import { NoteRevisionsService } from '../src/sync/note-revisions.service';
@@ -6,11 +7,11 @@ import { NoteRevisionsService } from '../src/sync/note-revisions.service';
 // behaviour rather than ChangeLog contents.
 export function createMockSyncEmitter() {
   return {
-    emit: jest.fn().mockResolvedValue([]),
-    noteRecipients: jest.fn().mockResolvedValue([]),
-    notesRecipients: jest.fn().mockResolvedValue(new Map<string, string[]>()),
-    removeNote: jest.fn().mockResolvedValue([]),
-    removeNotes: jest.fn().mockResolvedValue([]),
+    emit: vi.fn().mockResolvedValue([]),
+    noteRecipients: vi.fn().mockResolvedValue([]),
+    notesRecipients: vi.fn().mockResolvedValue(new Map<string, string[]>()),
+    removeNote: vi.fn().mockResolvedValue([]),
+    removeNotes: vi.fn().mockResolvedValue([]),
   };
 }
 
@@ -21,8 +22,8 @@ export const asSyncEmitter = (mock: MockSyncEmitter) =>
 
 export function createMockSyncEvents() {
   return {
-    schedulePoke: jest.fn(),
-    poke: jest.fn(),
+    schedulePoke: vi.fn(),
+    poke: vi.fn(),
   };
 }
 
@@ -33,10 +34,10 @@ export const asSyncEvents = (mock: MockSyncEvents) =>
 
 export function createMockNoteRevisions() {
   return {
-    recordEdit: jest.fn().mockResolvedValue(undefined),
-    recordClient: jest.fn().mockResolvedValue(undefined),
-    recordConflict: jest.fn().mockResolvedValue(undefined),
-    recordRestore: jest.fn().mockResolvedValue(undefined),
+    recordEdit: vi.fn().mockResolvedValue(undefined),
+    recordClient: vi.fn().mockResolvedValue(undefined),
+    recordConflict: vi.fn().mockResolvedValue(undefined),
+    recordRestore: vi.fn().mockResolvedValue(undefined),
   };
 }
 

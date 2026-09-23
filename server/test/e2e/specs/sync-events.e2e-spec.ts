@@ -1,3 +1,12 @@
+import {
+  afterAll,
+  afterEach,
+  beforeAll,
+  beforeEach,
+  describe,
+  expect,
+  it,
+} from 'vitest';
 import request from 'supertest';
 import { Actor, createE2EApp, E2EApp } from '../support';
 

@@ -17,7 +17,7 @@
     "paths": { "src/*": ["./src/*"] },
     "incremental": true,
     "skipLibCheck": true,
-    "types": ["node", "jest", "express", "multer", "supertest"],
+    "types": ["node", "express", "multer", "supertest"],
     "strictNullChecks": true,
     "strictPropertyInitialization": false,
     "forceConsistentCasingInFileNames": true,

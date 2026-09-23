@@ -1,3 +1,4 @@
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   BadRequestException,
   ForbiddenException,
@@ -24,10 +25,10 @@ describe('NoteAccessService', () => {
 
   const prisma = {
     note: {
-      findUnique: jest.fn(() => Promise.resolve(note)),
+      findUnique: vi.fn(() => Promise.resolve(note)),
     },
     noteShare: {
-      findUnique: jest.fn(
+      findUnique: vi.fn(
         ({
           where,
         }: {
@@ -50,7 +51,7 @@ describe('NoteAccessService', () => {
   beforeEach(() => {
     note = { id: NOTE_ID, userId: OWNER, state: 'active' };
     shares = new Map();
-    jest.clearAllMocks();
+    vi.clearAllMocks();
   });
 
   describe('hasNoteAccess', () => {

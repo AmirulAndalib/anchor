@@ -1,3 +1,4 @@
+import { describe, expect, it } from 'vitest';
 import { HealthController } from './health.controller';
 import {
   ANCHOR_PROTOCOL,

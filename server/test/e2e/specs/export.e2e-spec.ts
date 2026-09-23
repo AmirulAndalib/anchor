@@ -1,3 +1,4 @@
+import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { Actor, createE2EApp, E2EApp, ExportManifestOnWire } from '../support';
 
 const SHOPPING = JSON.stringify({
@@ -84,9 +85,10 @@ describe('export', () => {
     it('drops an attachment whose file is gone and says so', async () => {
       const note = await owner.notes.create({ title: 'Trip' });
       const attachment = await owner.attachments.upload(note.id);
-      await ctx.prisma.$executeRawUnsafe(
-        `UPDATE "NoteAttachment" SET "storedFilename" = 'missing.png' WHERE id = '${attachment.id}'`,
-      );
+      await ctx.prisma.noteAttachment.update({
+        where: { id: attachment.id },
+        data: { storedFilename: 'missing.png' },
+      });
 
       const { zip } = await owner.export.download('anchor');
       const manifest = zip.json<ExportManifestOnWire>('manifest.json');

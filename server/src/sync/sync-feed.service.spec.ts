@@ -1,3 +1,4 @@
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { PrismaService } from '../prisma/prisma.service';
 import { SyncFeedService } from './sync-feed.service';
 import { SyncHydratorService, SyncFeedRow } from './sync-hydrator.service';
@@ -29,7 +30,7 @@ describe('SyncFeedService', () => {
       .slice(0, take)
       .map((id) => ({ id }));
 
-  const changeLogFindMany = jest.fn(
+  const changeLogFindMany = vi.fn(
     ({
       where,
       take,
@@ -50,17 +51,17 @@ describe('SyncFeedService', () => {
 
   const prisma = {
     syncState: {
-      findUnique: jest.fn(() => Promise.resolve(syncState)),
+      findUnique: vi.fn(() => Promise.resolve(syncState)),
     },
     changeLog: { findMany: changeLogFindMany },
     tag: {
-      findMany: jest.fn(
+      findMany: vi.fn(
         ({ where, take }: { where: { id?: { gt: string } }; take: number }) =>
           Promise.resolve(keyset(tagIds, where, take)),
       ),
     },
     note: {
-      findMany: jest.fn(
+      findMany: vi.fn(
         ({ where, take }: { where: { id?: { gt: string } }; take: number }) => {
           const ids = 'attachments' in where ? attachmentNoteIds : noteIds;
           return Promise.resolve(keyset(ids, where, take));
@@ -68,7 +69,7 @@ describe('SyncFeedService', () => {
       ),
     },
     notePin: {
-      findMany: jest.fn(
+      findMany: vi.fn(
         ({
           where,
           take,
@@ -88,7 +89,7 @@ describe('SyncFeedService', () => {
 
   // Pass-through: entries mirror the rows the feed produced.
   const hydrator = {
-    hydrate: jest.fn((_userId: string, rows: SyncFeedRow[]) =>
+    hydrate: vi.fn((_userId: string, rows: SyncFeedRow[]) =>
       Promise.resolve(
         rows.map((row) => ({
           seq: row.seq.toString(),
@@ -110,7 +111,7 @@ describe('SyncFeedService', () => {
     noteIds = [];
     attachmentNoteIds = [];
     pinNoteIds = [];
-    jest.clearAllMocks();
+    vi.clearAllMocks();
   });
 
   it('starts a fresh pull as a snapshot pinned at the current lastSeq', async () => {

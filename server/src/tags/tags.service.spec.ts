@@ -1,3 +1,4 @@
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ConflictException, NotFoundException } from '@nestjs/common';
 import { TagsService } from './tags.service';
 import { PrismaService } from '../prisma/prisma.service';
@@ -55,7 +56,7 @@ describe('TagsService', () => {
     id?: { not: string };
   }
 
-  const tagFindFirst = jest.fn(({ where }: { where: TagFindFirstWhere }) =>
+  const tagFindFirst = vi.fn(({ where }: { where: TagFindFirstWhere }) =>
     Promise.resolve(
       [...tags.values()].find(
         (t) =>
@@ -67,21 +68,19 @@ describe('TagsService', () => {
     ),
   );
 
-  const tagFindUnique = jest.fn(({ where }: { where: { id: string } }) => {
+  const tagFindUnique = vi.fn(({ where }: { where: { id: string } }) => {
     const tag = tags.get(where.id);
     return Promise.resolve(tag ? withCount(tag) : null);
   });
 
-  const tagFindUniqueOrThrow = jest.fn(
-    ({ where }: { where: { id: string } }) => {
-      const tag = tags.get(where.id);
-      return tag
-        ? Promise.resolve(withCount(tag))
-        : Promise.reject(new Error('Tag not found'));
-    },
-  );
+  const tagFindUniqueOrThrow = vi.fn(({ where }: { where: { id: string } }) => {
+    const tag = tags.get(where.id);
+    return tag
+      ? Promise.resolve(withCount(tag))
+      : Promise.reject(new Error('Tag not found'));
+  });
 
-  const tagCreate = jest.fn(
+  const tagCreate = vi.fn(
     ({
       data,
     }: {
@@ -107,7 +106,7 @@ describe('TagsService', () => {
     },
   );
 
-  const tagUpdate = jest.fn(
+  const tagUpdate = vi.fn(
     ({ where, data }: { where: { id: string }; data: Partial<TagRecord> }) => {
       const tag = tags.get(where.id)!;
       Object.assign(tag, data, { updatedAt: new Date() });
@@ -116,7 +115,7 @@ describe('TagsService', () => {
   );
 
   // Optimistic guard: only writes when updatedAt still matches.
-  const tagUpdateMany = jest.fn(
+  const tagUpdateMany = vi.fn(
     ({
       where,
       data,
@@ -149,7 +148,7 @@ describe('TagsService', () => {
     (window.gt === undefined || date > window.gt) &&
     (window.lte === undefined || date <= window.lte);
 
-  const tagFindMany = jest.fn(
+  const tagFindMany = vi.fn(
     ({
       where,
     }: {
@@ -191,7 +190,7 @@ describe('TagsService', () => {
   beforeEach(() => {
     tags = new Map();
     service = new TagsService(prisma, asSyncEmitter(createMockSyncEmitter()));
-    jest.clearAllMocks();
+    vi.clearAllMocks();
   });
 
   describe('create / update / remove', () => {

@@ -1,3 +1,6 @@
+import * as fs from 'fs';
+import * as path from 'path';
+import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { NotesService } from 'src/notes/services/notes.service';
 import { RETENTION_CHUNK_SIZE } from 'src/common/retention.constants';
 import { Actor, createE2EApp, DAY_MS, E2EApp } from '../support';
@@ -84,14 +87,23 @@ describe('note retention', () => {
   });
 
   it('purgeTombstones hard-deletes old tombstones and their attachment files', async () => {
-    const note = await user.notes.create({ title: 'purge me' });
-    await user.notes.purge(note.id);
-    await ctx.setNoteClocks(note.id, { stateChangedAt: daysAgo(31) });
+    const old = await user.notes.create({ title: 'purge me' });
+    const young = await user.notes.create({ title: 'not yet' });
+    for (const note of [old, young]) {
+      await user.attachments.upload(note.id);
+      await user.notes.purge(note.id);
+    }
+    await ctx.setNoteClocks(old.id, { stateChangedAt: daysAgo(31) });
+    const filesOf = (noteId: string) =>
+      path.join(ctx.storage.attachmentsDir, noteId);
+    expect(fs.readdirSync(filesOf(old.id))).toHaveLength(1);
 
     const result = await notes.purgeTombstones(30);
     expect(result.purgedNotesCount).toBe(1);
     expect(
-      await ctx.prisma.note.findUnique({ where: { id: note.id } }),
+      await ctx.prisma.note.findUnique({ where: { id: old.id } }),
     ).toBeNull();
+    expect(fs.existsSync(filesOf(old.id))).toBe(false);
+    expect(fs.readdirSync(filesOf(young.id))).toHaveLength(1);
   });
 });

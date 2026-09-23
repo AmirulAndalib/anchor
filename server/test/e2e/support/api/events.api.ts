@@ -1,4 +1,5 @@
 import * as http from 'node:http';
+import type { AddressInfo } from 'node:net';
 
 const DEFAULT_WAIT_MS = 5000;
 
@@ -33,13 +34,14 @@ export class SyncEventStream {
 }
 
 export function openSyncEventStream(
-  port: number,
+  address: AddressInfo,
   token: string,
 ): Promise<SyncEventStream> {
   return new Promise((resolve, reject) => {
     const req = http.get(
       {
-        port,
+        host: address.address,
+        port: address.port,
         path: '/api/sync/events',
         headers: { Authorization: `Bearer ${token}` },
       },

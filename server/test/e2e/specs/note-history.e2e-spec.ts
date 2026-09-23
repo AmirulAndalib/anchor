@@ -1,3 +1,4 @@
+import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { Actor, createE2EApp, E2EApp, entriesOf } from '../support';
 
 describe('note history', () => {

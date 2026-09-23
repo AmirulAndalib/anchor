@@ -1,3 +1,4 @@
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { Logger } from '@nestjs/common';
 import { NoteSharePermission, NoteState } from 'src/generated/prisma/enums';
 import { PrismaService } from '../prisma/prisma.service';
@@ -37,7 +38,7 @@ describe('SyncApplyService', () => {
   let fullNote: Record<string, unknown> | null;
   let updateManyCount: number;
 
-  const noteFindUnique = jest.fn(
+  const noteFindUnique = vi.fn(
     (args: { select?: unknown; include?: unknown }) => {
       if (args.select) {
         return Promise.resolve(noteExists ? { id: 'n1' } : null);
@@ -49,11 +50,11 @@ describe('SyncApplyService', () => {
     },
   );
   let createdNote: { state: NoteState; version: number };
-  const noteCreate = jest.fn((args: { data: { title: string } }) => {
+  const noteCreate = vi.fn((args: { data: { title: string } }) => {
     void args;
     return Promise.resolve(createdNote);
   });
-  const noteUpdateMany = jest.fn(
+  const noteUpdateMany = vi.fn(
     (args: { where: unknown; data: Record<string, unknown> }) => {
       void args;
       return Promise.resolve({ count: updateManyCount });
@@ -62,28 +63,28 @@ describe('SyncApplyService', () => {
 
   let existingTag: Record<string, unknown> | null;
   let collidingTag: Record<string, unknown> | null;
-  const tagFindUnique = jest.fn(() => Promise.resolve(existingTag));
-  const tagFindFirst = jest.fn(() => Promise.resolve(collidingTag));
-  const tagCreate = jest.fn();
-  const tagUpdateMany = jest.fn(() =>
+  const tagFindUnique = vi.fn(() => Promise.resolve(existingTag));
+  const tagFindFirst = vi.fn(() => Promise.resolve(collidingTag));
+  const tagCreate = vi.fn();
+  const tagUpdateMany = vi.fn(() =>
     Promise.resolve({ count: updateManyCount }),
   );
 
   let pinRow: { noteId: string } | null;
-  const pinFindUnique = jest.fn(() => Promise.resolve(pinRow));
-  const pinUpsert = jest.fn().mockResolvedValue({});
-  const pinDeleteMany = jest.fn().mockResolvedValue({ count: 1 });
+  const pinFindUnique = vi.fn(() => Promise.resolve(pinRow));
+  const pinUpsert = vi.fn().mockResolvedValue({});
+  const pinDeleteMany = vi.fn().mockResolvedValue({ count: 1 });
 
   let reminderRow: Record<string, unknown> | null;
   let reminderWriteCount: number;
-  const reminderFindUnique = jest.fn(() => Promise.resolve(reminderRow));
-  const reminderCreate = jest.fn((args: { data: Record<string, unknown> }) =>
+  const reminderFindUnique = vi.fn(() => Promise.resolve(reminderRow));
+  const reminderCreate = vi.fn((args: { data: Record<string, unknown> }) =>
     Promise.resolve({ ...args.data, version: 1 }),
   );
-  const reminderUpdateMany = jest.fn(() =>
+  const reminderUpdateMany = vi.fn(() =>
     Promise.resolve({ count: reminderWriteCount }),
   );
-  const reminderDeleteMany = jest.fn(() =>
+  const reminderDeleteMany = vi.fn(() =>
     Promise.resolve({ count: reminderWriteCount }),
   );
 
@@ -99,7 +100,7 @@ describe('SyncApplyService', () => {
       findFirst: tagFindFirst,
       create: tagCreate,
       updateMany: tagUpdateMany,
-      findMany: jest.fn().mockResolvedValue([]),
+      findMany: vi.fn().mockResolvedValue([]),
     },
     notePin: {
       findUnique: pinFindUnique,
@@ -114,7 +115,7 @@ describe('SyncApplyService', () => {
     },
   } as unknown as PrismaService;
 
-  const hasNoteAccess = jest.fn();
+  const hasNoteAccess = vi.fn();
   const noteAccess = { hasNoteAccess } as unknown as NoteAccessService;
 
   const makeFullNote = (overrides: Record<string, unknown> = {}) => ({
@@ -190,7 +191,7 @@ describe('SyncApplyService', () => {
     reminderRow = null;
     reminderWriteCount = 1;
     updateManyCount = 1;
-    jest.clearAllMocks();
+    vi.clearAllMocks();
     emitter.noteRecipients.mockResolvedValue([USER]);
   });
 
@@ -688,7 +689,7 @@ describe('SyncApplyService', () => {
     });
 
     it('returns a retryable failure without dropping the rest of the batch', async () => {
-      jest.spyOn(Logger.prototype, 'error').mockImplementation(() => {});
+      vi.spyOn(Logger.prototype, 'error').mockImplementation(() => {});
       noteExists = false;
       createdNote = { state: NoteState.active, version: 1 };
       noteCreate.mockImplementationOnce(() => {

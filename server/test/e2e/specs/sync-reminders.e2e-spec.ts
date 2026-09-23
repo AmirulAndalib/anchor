@@ -1,5 +1,6 @@
+import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { NotesService } from 'src/notes/services/notes.service';
-import { Actor, createE2EApp, E2EApp } from '../support';
+import { Actor, createE2EApp, DAY_MS, E2EApp } from '../support';
 import type { ReminderOnWire, SyncEntry } from '../support/wire';
 
 describe('sync reminders', () => {
@@ -206,9 +207,8 @@ describe('sync reminders', () => {
     await owner.notes.purge(note.id);
     expect(await storedReminder(owner.id, note.id)).not.toBeNull();
 
-    await ctx.prisma.note.update({
-      where: { id: note.id },
-      data: { stateChangedAt: new Date(Date.now() - 31 * 86_400_000) },
+    await ctx.setNoteClocks(note.id, {
+      stateChangedAt: new Date(Date.now() - 31 * DAY_MS),
     });
     await ctx.get(NotesService).purgeTombstones(30);
 

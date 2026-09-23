@@ -1,3 +1,4 @@
+import { describe, expect, it } from 'vitest';
 import { BadRequestException } from '@nestjs/common';
 import { AttachmentType } from 'src/generated/prisma/enums';
 import { ATTACHMENT_MAX_FILE_SIZE } from '../constants/notes.constants';

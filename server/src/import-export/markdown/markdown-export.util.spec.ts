@@ -1,3 +1,4 @@
+import { describe, expect, it } from 'vitest';
 import { ExportManifestNote, ExportManifestV1 } from '../export-manifest.util';
 import { noteFolder, planMarkdownExport } from './markdown-export.util';
 

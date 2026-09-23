@@ -1,3 +1,11 @@
+import {
+  beforeEach,
+  describe,
+  expect,
+  it,
+  type MockInstance,
+  vi,
+} from 'vitest';
 import { Logger } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import { ImportService } from './import.service';
@@ -40,10 +48,10 @@ const makeItem = (
 describe('ImportService.importNotes', () => {
   let prisma: MockPrismaService;
   let service: ImportService;
-  let loggerError: jest.SpyInstance;
+  let loggerError: MockInstance;
 
   beforeEach(async () => {
-    loggerError = jest
+    loggerError = vi
       .spyOn(Logger.prototype, 'error')
       .mockImplementation(() => undefined);
     prisma = createMockPrisma();
@@ -62,7 +70,7 @@ describe('ImportService.importNotes', () => {
         { provide: PrismaService, useValue: prisma },
         {
           provide: NoteAccessService,
-          useValue: { verifyNoteOwnership: jest.fn() },
+          useValue: { verifyNoteOwnership: vi.fn() },
         },
         {
           provide: SyncEmitterService,

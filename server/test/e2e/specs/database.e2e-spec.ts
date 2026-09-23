@@ -1,10 +1,11 @@
+import { afterAll, beforeAll, describe, expect, inject, it } from 'vitest';
 import { Client } from 'pg';
 
 describe('database schema and sync sequences', () => {
   let client: Client;
 
   beforeAll(async () => {
-    client = new Client({ connectionString: process.env.E2E_DATABASE_URL });
+    client = new Client({ connectionString: inject('databaseUrl') });
     await client.connect();
   });
 
@@ -81,7 +82,7 @@ describe('database schema and sync sequences', () => {
        VALUES ('seq-lock-user', 'seq-lock@example.com', 'x', 'Lock', now())`,
     );
     const rival = new Client({
-      connectionString: process.env.E2E_DATABASE_URL,
+      connectionString: inject('databaseUrl'),
     });
     await rival.connect();
 

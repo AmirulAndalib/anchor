@@ -1,3 +1,4 @@
+import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 import { AppConfig, StorageConfig } from './configuration';
 
 describe('configuration namespaces', () => {

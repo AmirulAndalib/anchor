@@ -1,3 +1,4 @@
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { NotFoundException } from '@nestjs/common';
 import { NoteHistoryService } from './note-history.service';
 import { NoteAccessService } from './note-access.service';
@@ -86,13 +87,13 @@ describe('NoteHistoryService', () => {
   };
 
   const accessMock = {
-    ensureNoteAccess: jest.fn(() => {
+    ensureNoteAccess: vi.fn(() => {
       if (!access.hasAccess) {
         throw new NotFoundException('Note not found');
       }
       return Promise.resolve(access);
     }),
-    ensureNoteIsActive: jest.fn().mockResolvedValue(undefined),
+    ensureNoteIsActive: vi.fn().mockResolvedValue(undefined),
   };
 
   const revisionAt = (
@@ -124,7 +125,7 @@ describe('NoteHistoryService', () => {
     access = { hasAccess: true, isOwner: true, state: NoteState.active };
     emitter = createMockSyncEmitter();
     noteRevisions = createMockNoteRevisions();
-    jest.clearAllMocks();
+    vi.clearAllMocks();
 
     service = new NoteHistoryService(
       prismaMock as unknown as PrismaService,

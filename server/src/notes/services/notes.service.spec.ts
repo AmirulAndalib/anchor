@@ -1,3 +1,4 @@
+import { beforeEach, describe, expect, it, type Mock, vi } from 'vitest';
 import { NotesService } from './notes.service';
 import { NoteAccessService } from './note-access.service';
 import { NoteAttachmentsService } from './note-attachments.service';
@@ -103,26 +104,26 @@ describe('NotesService tag reconciliation (shared notes)', () => {
       .filter((t) => noteTags.has(pair(noteId, t.id)))
       .map((t) => ({ id: t.id, userId: t.userId }));
 
-  const noteUpdateMock = jest.fn(noteUpdate);
+  const noteUpdateMock = vi.fn(noteUpdate);
   let storedReminder: {
     remindAt: string;
     recurrence: string;
     version: number;
   } | null = null;
 
-  const reminderUpsert = jest.fn().mockResolvedValue({
+  const reminderUpsert = vi.fn().mockResolvedValue({
     remindAt: '2026-09-04T09:00',
     recurrence: 'none',
     version: 1,
   });
-  const reminderFindUnique = jest.fn(() => Promise.resolve(storedReminder));
-  const reminderDelete = jest.fn().mockResolvedValue(undefined);
+  const reminderFindUnique = vi.fn(() => Promise.resolve(storedReminder));
+  const reminderDelete = vi.fn().mockResolvedValue(undefined);
 
   const prisma = {
     $transaction: (cb: (tx: PrismaService) => unknown) => cb(prisma),
     note: {
       update: noteUpdateMock,
-      findUniqueOrThrow: jest.fn(({ where }: { where: { id: string } }) =>
+      findUniqueOrThrow: vi.fn(({ where }: { where: { id: string } }) =>
         Promise.resolve({
           id: where.id,
           title: 'Groceries',
@@ -138,18 +139,18 @@ describe('NotesService tag reconciliation (shared notes)', () => {
         }),
       ),
     },
-    tag: { findMany: jest.fn(tagFindMany) },
-    notePin: { upsert: jest.fn(), deleteMany: jest.fn() },
+    tag: { findMany: vi.fn(tagFindMany) },
+    notePin: { upsert: vi.fn(), deleteMany: vi.fn() },
     noteReminder: {
       findUnique: reminderFindUnique,
       upsert: reminderUpsert,
       delete: reminderDelete,
-      deleteMany: jest.fn().mockResolvedValue({ count: 1 }),
+      deleteMany: vi.fn().mockResolvedValue({ count: 1 }),
     },
   } as unknown as PrismaService;
 
   const noteAccess = {
-    ensureNoteAccess: jest.fn().mockResolvedValue(undefined),
+    ensureNoteAccess: vi.fn().mockResolvedValue(undefined),
   } as unknown as NoteAccessService;
 
   beforeEach(() => {
@@ -169,7 +170,7 @@ describe('NotesService tag reconciliation (shared notes)', () => {
       asSyncEmitter(createMockSyncEmitter()),
       asNoteRevisions(createMockNoteRevisions()),
     );
-    jest.clearAllMocks();
+    vi.clearAllMocks();
   });
 
   it("owner's update does not drop the editor's tag on a shared note", async () => {
@@ -273,8 +274,9 @@ describe('NotesService tag reconciliation (shared notes)', () => {
   });
 });
 
-const emittedTypes = (emitter: { emit: jest.Mock }): string[] =>
-  emitter.emit.mock.calls.flatMap(
-    ([, emissions]: [unknown, Array<{ entityType: string }>]) =>
-      emissions.map((emission) => emission.entityType),
+type Emit = (tx: unknown, emissions: Array<{ entityType: string }>) => unknown;
+
+const emittedTypes = (emitter: { emit: Mock<Emit> }): string[] =>
+  emitter.emit.mock.calls.flatMap(([, emissions]) =>
+    emissions.map((emission) => emission.entityType),
   );

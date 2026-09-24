@@ -6,4 +6,7 @@ allowBuilds:
   '@prisma/engines': true
   bcrypt: true
   '@nestjs/core': false
-  unrs-resolver: false
+  cpu-features: false
+  protobufjs: false
+  ssh2: false
+  '@swc/core': false

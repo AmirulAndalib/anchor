@@ -1,3 +1,4 @@
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { PrismaService } from '../prisma/prisma.service';
 import {
   NoteSharePermission,
@@ -21,9 +22,9 @@ describe('SyncHydratorService', () => {
   let tags: unknown[];
   let attachments: unknown[];
 
-  const noteFindMany = jest.fn(() => Promise.resolve(notes));
-  const tagFindMany = jest.fn(() => Promise.resolve(tags));
-  const attachmentFindMany = jest.fn(() => Promise.resolve(attachments));
+  const noteFindMany = vi.fn(() => Promise.resolve(notes));
+  const tagFindMany = vi.fn(() => Promise.resolve(tags));
+  const attachmentFindMany = vi.fn(() => Promise.resolve(attachments));
 
   const prisma = {
     note: { findMany: noteFindMany },
@@ -72,7 +73,7 @@ describe('SyncHydratorService', () => {
     notes = [];
     tags = [];
     attachments = [];
-    jest.clearAllMocks();
+    vi.clearAllMocks();
   });
 
   it('hydrates a note upsert through transformNote, version included', async () => {

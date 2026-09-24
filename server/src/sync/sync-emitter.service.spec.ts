@@ -1,3 +1,4 @@
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Prisma } from 'src/generated/prisma/client';
 import { SyncEntityType, SyncOp } from 'src/generated/prisma/enums';
 import {
@@ -30,7 +31,7 @@ describe('SyncEmitterService', () => {
   let seqByUser: Map<string, bigint>;
   let upserted: UpsertedRow[];
 
-  const queryRaw = jest.fn(
+  const queryRaw = vi.fn(
     (_strings: TemplateStringsArray, uid: string, n: number) => {
       const last = (seqByUser.get(uid) ?? 0n) + BigInt(n);
       seqByUser.set(uid, last);
@@ -38,7 +39,7 @@ describe('SyncEmitterService', () => {
     },
   );
 
-  const executeRaw = jest.fn((query: Prisma.Sql) => {
+  const executeRaw = vi.fn((query: Prisma.Sql) => {
     for (let i = 0; i < query.values.length; i += VALUES_PER_ROW) {
       const [recipientUserId, entityType, entityId, op, seq] =
         query.values.slice(i, i + VALUES_PER_ROW);
@@ -53,7 +54,7 @@ describe('SyncEmitterService', () => {
     return Promise.resolve(upserted.length);
   });
 
-  const changeLogDeleteMany = jest.fn().mockResolvedValue({ count: 0 });
+  const changeLogDeleteMany = vi.fn().mockResolvedValue({ count: 0 });
 
   const tx = {
     $queryRaw: queryRaw,
@@ -66,7 +67,7 @@ describe('SyncEmitterService', () => {
     service = new SyncEmitterService(asSyncEvents(syncEvents));
     seqByUser = new Map();
     upserted = [];
-    jest.clearAllMocks();
+    vi.clearAllMocks();
   });
 
   it('allocates one contiguous seq block per recipient', async () => {

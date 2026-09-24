@@ -1,3 +1,4 @@
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { MessageEvent } from '@nestjs/common';
 import { SyncEventsService } from './sync-events.service';
 import { PrismaService } from '../prisma/prisma.service';
@@ -46,13 +47,13 @@ describe('SyncEventsService', () => {
   };
 
   beforeEach(() => {
-    jest.useFakeTimers();
+    vi.useFakeTimers();
     pendingCommits = [];
     service = new SyncEventsService(prisma);
   });
 
   afterEach(() => {
-    jest.useRealTimers();
+    vi.useRealTimers();
   });
 
   it('delivers a scheduled poke only once the transaction commits', () => {
@@ -85,8 +86,8 @@ describe('SyncEventsService', () => {
   it('sends a ping every interval', () => {
     const conn = connect('user-1');
 
-    jest.advanceTimersByTime(SYNC_EVENTS_PING_INTERVAL_MS);
-    jest.advanceTimersByTime(SYNC_EVENTS_PING_INTERVAL_MS);
+    vi.advanceTimersByTime(SYNC_EVENTS_PING_INTERVAL_MS);
+    vi.advanceTimersByTime(SYNC_EVENTS_PING_INTERVAL_MS);
 
     expect(conn.events).toEqual([
       { type: 'ping', data: '' },
@@ -98,7 +99,7 @@ describe('SyncEventsService', () => {
   it('sends a reconnect event and completes at the max stream age', () => {
     const conn = connect('user-1');
 
-    jest.advanceTimersByTime(SYNC_EVENTS_MAX_STREAM_AGE_MS);
+    vi.advanceTimersByTime(SYNC_EVENTS_MAX_STREAM_AGE_MS);
 
     expect(conn.events[conn.events.length - 1]).toEqual({
       type: 'reconnect',

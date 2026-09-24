@@ -1,3 +1,4 @@
+import { describe, expect, it, vi } from 'vitest';
 import type { ExecutionContext, HttpException } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { ANCHOR_PROTOCOL_HEADER, ProtocolGuard } from './protocol.guard';
@@ -11,7 +12,7 @@ const UPGRADE_REQUIRED = 426;
 
 const guard = (skipped = false) => {
   const reflector = new Reflector();
-  jest.spyOn(reflector, 'getAllAndOverride').mockReturnValue(skipped);
+  vi.spyOn(reflector, 'getAllAndOverride').mockReturnValue(skipped);
   return new ProtocolGuard(reflector);
 };
 

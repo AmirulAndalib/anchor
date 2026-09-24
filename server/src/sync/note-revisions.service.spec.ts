@@ -1,3 +1,4 @@
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Prisma } from 'src/generated/prisma/client';
 import { RevisionCause } from 'src/generated/prisma/enums';
 import { NoteRevisionsService } from './note-revisions.service';
@@ -11,9 +12,9 @@ describe('NoteRevisionsService', () => {
     createdAt: Date;
   } | null;
 
-  const revisionFindFirst = jest.fn(() => Promise.resolve(newest));
-  const revisionCreate = jest.fn().mockResolvedValue({});
-  const revisionCreateMany = jest.fn().mockResolvedValue({ count: 0 });
+  const revisionFindFirst = vi.fn(() => Promise.resolve(newest));
+  const revisionCreate = vi.fn().mockResolvedValue({});
+  const revisionCreateMany = vi.fn().mockResolvedValue({ count: 0 });
 
   const tx = {
     noteRevision: {
@@ -33,7 +34,7 @@ describe('NoteRevisionsService', () => {
   beforeEach(() => {
     service = new NoteRevisionsService();
     newest = null;
-    jest.clearAllMocks();
+    vi.clearAllMocks();
   });
 
   it('preserves the replaced content as an edit revision', async () => {

@@ -1,3 +1,4 @@
+import { describe, expect, it } from 'vitest';
 import { IsOptional, IsString } from 'class-validator';
 import { BadRequestException, type ArgumentMetadata } from '@nestjs/common';
 import { AppValidationPipe } from './app-validation.pipe';

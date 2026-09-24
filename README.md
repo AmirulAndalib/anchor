@@ -219,14 +219,14 @@ Alternatively, configure OIDC via the admin panel (Settings → OIDC Authenticat
 
 ## Backup and Restore
 
-Log into your anchor deployment, go to **Settings**, scroll to **Export & Import** and export **Anchor backup (.zip)**.
+Log into your Anchor deployment, go to **Settings**, scroll to **Export & Import** and export **Anchor backup (.zip)**.
 
-The resulting `backup.zip` contains:
+The resulting `anchor-export-YYYY-MM-DD.zip` contains:
 
 - `manifest.json` which includes the backup metadata, tags, notes, and attachment references in plain text
 - the referenced attachments, stored within the `attachments` folder structure
 
-Restore the notes by uploading `anchor_backup.zip` file through the web UI. Go to **Settings**, then scroll down to the **Export & Import** section.
+Restore the notes by uploading that file through the web UI. Go to **Settings**, then scroll down to the **Export & Import** section.
 
 ## Troubleshooting & Collecting Logs
 

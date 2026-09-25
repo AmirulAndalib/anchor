@@ -2,6 +2,7 @@ import 'package:riverpod_annotation/riverpod_annotation.dart';
 
 import '../../../core/network/server_config_provider.dart';
 import '../../../core/providers/active_user_id_provider.dart';
+import '../../../core/providers/session_expired_provider.dart';
 import '../data/repository/auth_repository.dart';
 import '../domain/user.dart';
 
@@ -98,6 +99,7 @@ class AuthController extends _$AuthController {
       // Clear activeUserId - this closes the DB via provider invalidation
       // Data stays safe in the per-user database file
       ref.read(activeUserIdProvider.notifier).set(null);
+      ref.read(sessionExpiredProvider.notifier).clear();
       return null;
     });
   }

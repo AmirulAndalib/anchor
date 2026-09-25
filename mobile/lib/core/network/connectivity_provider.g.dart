@@ -82,7 +82,7 @@ final class SyncManagerProvider extends $NotifierProvider<SyncManager, bool> {
   }
 }
 
-String _$syncManagerHash() => r'3cfdc2b223271917afc64639602e9125f95f6471';
+String _$syncManagerHash() => r'16ae8ba90dd84c9cd09a37c76b5eb77aa2ae9341';
 
 abstract class _$SyncManager extends $Notifier<bool> {
   bool build();

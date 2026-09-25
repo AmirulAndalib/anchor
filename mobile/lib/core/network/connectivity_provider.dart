@@ -11,6 +11,7 @@ import '../../features/sync/data/sync_events.dart';
 import '../../features/sync/data/sync_service.dart';
 import '../logging/app_logger.dart';
 import '../providers/active_user_id_provider.dart';
+import '../providers/session_expired_provider.dart';
 import 'server_config_provider.dart';
 import 'anchor_protocol.dart';
 import 'sync_requester.dart';
@@ -71,6 +72,8 @@ class SyncManager extends _$SyncManager {
       }
     });
 
+    ref.listen<bool>(sessionExpiredProvider, (_, _) => _applyLiveUpdates());
+
     // Changing the server URL builds a new one, disconnected.
     ref.listen<SyncEvents>(
       syncEventsProvider,
@@ -96,7 +99,9 @@ class SyncManager extends _$SyncManager {
 
   void _applyLiveUpdates() {
     final events = ref.read(syncEventsProvider);
-    if (_isForeground && ref.read(activeUserIdProvider) != null) {
+    if (_isForeground &&
+        ref.read(activeUserIdProvider) != null &&
+        !ref.read(sessionExpiredProvider)) {
       events.connect();
       _poll ??= Timer.periodic(
         _pollInterval,
@@ -124,7 +129,9 @@ class SyncManager extends _$SyncManager {
 
   Future<void> requestSync() {
     final userId = ref.read(activeUserIdProvider);
-    if (userId == null) return Future.value();
+    if (userId == null || ref.read(sessionExpiredProvider)) {
+      return Future.value();
+    }
 
     final activeSync = _activeSync;
     if (activeSync != null) {

@@ -3,15 +3,13 @@ import 'package:dio/dio.dart';
 import 'package:dio/io.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
-import '../logging/app_logger.dart';
 import '../logging/dio_logging_interceptor.dart';
+import '../providers/session_expired_provider.dart';
+import 'auth_interceptor.dart';
 import 'server_config_provider.dart';
 import 'anchor_protocol.dart';
 
 part 'dio_provider.g.dart';
-
-// Global flag to prevent multiple simultaneous refresh attempts
-bool _isRefreshing = false;
 
 /// Creates an [IOHttpClientAdapter] that accepts self-signed/invalid
 /// certificates only for the host derived from [serverUrl].
@@ -56,134 +54,34 @@ Dio dio(Ref ref) {
     dio.httpClientAdapter = createSelfSignedCertAdapter(serverUrl);
   }
 
-  // Add Authorization Interceptor with token refresh
-  const storage = FlutterSecureStorage();
+  // Separate client so refreshing skips the interceptors.
+  final refreshDio = Dio();
+  if (serverUrl != null && serverUrl.isNotEmpty) {
+    refreshDio.options.baseUrl = serverUrl;
+  }
+  refreshDio.options.connectTimeout = const Duration(seconds: 10);
+  refreshDio.options.receiveTimeout = const Duration(seconds: 10);
+  refreshDio.options.headers = {
+    'Content-Type': 'application/json',
+    'Accept': 'application/json',
+  };
+  if (allowSelfSigned && serverUrl != null && serverUrl.isNotEmpty) {
+    refreshDio.httpClientAdapter = createSelfSignedCertAdapter(serverUrl);
+  }
+
+  dio.interceptors.add(
+    AuthInterceptor(
+      dio: dio,
+      refreshDio: refreshDio,
+      storage: const FlutterSecureStorage(),
+      session: ref.read(sessionExpiredProvider.notifier),
+    ),
+  );
+
+  // Transform DioException into user-friendly error
   dio.interceptors.add(
     InterceptorsWrapper(
-      onRequest: (options, handler) async {
-        final token = await storage.read(key: 'access_token');
-        if (token != null) {
-          options.headers['Authorization'] = 'Bearer $token';
-        }
-        return handler.next(options);
-      },
-      onError: (DioException e, handler) async {
-        // Handle 401 errors with token refresh
-        if (e.response?.statusCode == 401) {
-          // Don't try to refresh if we're already on the refresh endpoint
-          if (e.requestOptions.path.contains('/api/auth/refresh')) {
-            return handler.reject(e);
-          }
-
-          // Attempt token refresh
-          if (!_isRefreshing) {
-            _isRefreshing = true;
-
-            try {
-              final refreshToken = await storage.read(key: 'refresh_token');
-
-              if (refreshToken == null) {
-                _isRefreshing = false;
-                return handler.reject(e);
-              }
-
-              // Create a separate Dio instance to avoid interceptor recursion
-              final refreshDio = Dio();
-              if (serverUrl != null && serverUrl.isNotEmpty) {
-                refreshDio.options.baseUrl = serverUrl;
-              }
-              refreshDio.options.connectTimeout = const Duration(seconds: 10);
-              refreshDio.options.receiveTimeout = const Duration(seconds: 10);
-              refreshDio.options.headers = {
-                'Content-Type': 'application/json',
-                'Accept': 'application/json',
-              };
-              if (allowSelfSigned &&
-                  serverUrl != null &&
-                  serverUrl.isNotEmpty) {
-                refreshDio.httpClientAdapter = createSelfSignedCertAdapter(
-                  serverUrl,
-                );
-              }
-
-              // Call refresh endpoint
-              final response = await refreshDio.post(
-                '/api/auth/refresh',
-                data: {'refresh_token': refreshToken},
-              );
-
-              final newAccessToken = response.data['access_token'] as String;
-              final newRefreshToken = response.data['refresh_token'] as String;
-
-              // Store new tokens
-              await storage.write(key: 'access_token', value: newAccessToken);
-              await storage.write(key: 'refresh_token', value: newRefreshToken);
-
-              _isRefreshing = false;
-
-              // Retry the original request with new token
-              final opts = Options(
-                method: e.requestOptions.method,
-                headers: {
-                  ...e.requestOptions.headers,
-                  'Authorization': 'Bearer $newAccessToken',
-                },
-              );
-
-              final retryResponse = await dio.request(
-                e.requestOptions.path,
-                options: opts,
-                data: e.requestOptions.data,
-                queryParameters: e.requestOptions.queryParameters,
-              );
-
-              return handler.resolve(retryResponse);
-            } catch (refreshError, stack) {
-              _isRefreshing = false;
-              AppLogger.instance.error(
-                'Auth',
-                'Token refresh failed',
-                error: refreshError,
-                stackTrace: stack,
-              );
-              return handler.reject(e);
-            }
-          } else {
-            // Already refreshing, wait a bit and retry
-            await Future.delayed(const Duration(milliseconds: 100));
-
-            // Check if tokens were updated
-            final newToken = await storage.read(key: 'access_token');
-            if (newToken != null) {
-              // Retry with new token
-              final opts = Options(
-                method: e.requestOptions.method,
-                headers: {
-                  ...e.requestOptions.headers,
-                  'Authorization': 'Bearer $newToken',
-                },
-              );
-
-              try {
-                final retryResponse = await dio.request(
-                  e.requestOptions.path,
-                  options: opts,
-                  data: e.requestOptions.data,
-                  queryParameters: e.requestOptions.queryParameters,
-                );
-                return handler.resolve(retryResponse);
-              } catch (_) {
-                // Retry failed, reject with original error
-                return handler.reject(e);
-              }
-            }
-          }
-        }
-
-        // Transform DioException into user-friendly error
-        final transformedError = _transformError(e);
-        return handler.next(transformedError);
-      },
+      onError: (e, handler) => handler.next(_transformError(e)),
     ),
   );
 

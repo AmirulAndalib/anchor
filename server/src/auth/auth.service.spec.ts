@@ -10,6 +10,7 @@ import * as bcrypt from 'bcrypt';
 import { AuthService } from './auth.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { SettingsService } from '../settings/settings.service';
+import { REFRESH_TOKEN_REUSE_WINDOW_MS } from './constants/auth.constants';
 
 /**
  * AuthService against in-memory user/refresh-token stores with real bcrypt.
@@ -143,6 +144,27 @@ describe('AuthService', () => {
           for (const [token, record] of refreshTokens) {
             if (record.token === where.token || record.id === where.id) {
               refreshTokens.delete(token);
+              count++;
+            }
+          }
+          return Promise.resolve({ count });
+        },
+      ),
+      updateMany: vi.fn(
+        ({
+          where,
+          data,
+        }: {
+          where: { id: string; expiresAt: { gt: Date } };
+          data: Partial<RefreshTokenRecord>;
+        }) => {
+          let count = 0;
+          for (const record of refreshTokens.values()) {
+            if (
+              record.id === where.id &&
+              record.expiresAt > where.expiresAt.gt
+            ) {
+              Object.assign(record, data);
               count++;
             }
           }
@@ -310,17 +332,42 @@ describe('AuthService', () => {
       );
     });
 
-    it('rotates the token: old one is revoked, new one works', async () => {
+    it('rotates the token: the new one works, the old one only briefly', async () => {
       const oldToken = await loginAndGetRefreshToken();
       const result = await service.refreshTokens(oldToken);
 
-      expect(refreshTokens.has(oldToken)).toBe(false);
       expect(result.refresh_token).not.toBe(oldToken);
       expect(refreshTokens.has(result.refresh_token)).toBe(true);
-      // The old token must not be reusable.
-      await expect(service.refreshTokens(oldToken)).rejects.toThrow(
-        UnauthorizedException,
-      );
+      expect(
+        refreshTokens.get(oldToken)!.expiresAt.getTime(),
+      ).toBeLessThanOrEqual(Date.now() + REFRESH_TOKEN_REUSE_WINDOW_MS);
+    });
+
+    it('lets a client that missed the reply refresh again with the old token', async () => {
+      const oldToken = await loginAndGetRefreshToken();
+      const first = await service.refreshTokens(oldToken);
+      const reuseUntil = refreshTokens.get(oldToken)!.expiresAt;
+
+      const second = await service.refreshTokens(oldToken);
+
+      expect(second.refresh_token).not.toBe(first.refresh_token);
+      expect(refreshTokens.has(second.refresh_token)).toBe(true);
+      expect(refreshTokens.get(oldToken)!.expiresAt).toEqual(reuseUntil);
+    });
+
+    it('rejects the old token once the reuse window has passed', async () => {
+      const oldToken = await loginAndGetRefreshToken();
+      await service.refreshTokens(oldToken);
+
+      vi.useFakeTimers({ toFake: ['Date'] });
+      try {
+        vi.setSystemTime(Date.now() + REFRESH_TOKEN_REUSE_WINDOW_MS + 1000);
+        await expect(service.refreshTokens(oldToken)).rejects.toThrow(
+          /expired/,
+        );
+      } finally {
+        vi.useRealTimers();
+      }
     });
   });
 

@@ -28,6 +28,7 @@ import {
   API_TOKEN_MAX_GENERATION_RETRIES,
   BCRYPT_SALT_ROUNDS,
   REFRESH_TOKEN_BYTES,
+  REFRESH_TOKEN_REUSE_WINDOW_MS,
   REFRESH_TOKEN_VALIDITY_DAYS,
 } from './constants/auth.constants';
 
@@ -192,16 +193,18 @@ export class AuthService {
       throw new UnauthorizedException('Account pending approval');
     }
 
-    // Revoke the old refresh token (token rotation)
-    await this.prisma.refreshToken.deleteMany({
-      where: { id: storedToken.id },
-    });
-
     // Generate new token pair
     const tokens = await this.createTokenPair(
       storedToken.user.id,
       storedToken.user.email,
     );
+
+    // Keep the old token working for the reuse window.
+    const reuseUntil = new Date(Date.now() + REFRESH_TOKEN_REUSE_WINDOW_MS);
+    await this.prisma.refreshToken.updateMany({
+      where: { id: storedToken.id, expiresAt: { gt: reuseUntil } },
+      data: { expiresAt: reuseUntil },
+    });
 
     return tokens;
   }

@@ -11,6 +11,7 @@ import '../../features/notes/domain/note.dart' as domain;
 import '../../features/notes/domain/reminder_schedule.dart';
 import '../logging/app_logger.dart';
 import '../providers/active_user_id_provider.dart';
+import '../widgets/quill_preview.dart';
 import 'notification_gateway.dart';
 
 part 'reminder_scheduler.g.dart';
@@ -262,6 +263,15 @@ class ReminderSyncReport {
   final int failed;
 }
 
+/// The note's title, or else the first line of its text.
+String? reminderHeading(domain.Note note) {
+  if (note.hasTitle) return note.title;
+  final firstLine = extractPlainTextFromQuillContent(
+    note.content,
+  ).split('\n').first;
+  return firstLine.isEmpty ? null : firstLine;
+}
+
 /// What the OS should be holding, soonest first and capped.
 List<DesiredReminder> desiredReminders(
   List<domain.Note> notes, {
@@ -282,11 +292,13 @@ List<DesiredReminder> desiredReminders(
       continue;
     }
 
+    final heading = reminderHeading(note);
     desired.add(
       DesiredReminder(
         id: slot,
         at: at,
-        title: note.displayTitle,
+        title: heading ?? 'Reminder',
+        body: heading == null ? '' : 'Reminder',
         repeat: matchComponentsFor(reminder.recurrence),
         noteId: note.id,
       ),
@@ -313,6 +325,7 @@ class DesiredReminder {
     required this.id,
     required this.at,
     required this.title,
+    this.body = 'Reminder',
     required this.repeat,
     required this.noteId,
   });
@@ -320,13 +333,14 @@ class DesiredReminder {
   final int id;
   final DateTime at;
   final String title;
+  final String body;
   final DateTimeComponents? repeat;
   final String noteId;
 
   ScheduledNotification toNotification() => ScheduledNotification(
     id: id,
     title: title,
-    body: 'Reminder',
+    body: body,
     at: at,
     repeat: repeat,
     payload: noteId,
@@ -338,9 +352,10 @@ class DesiredReminder {
       other.id == id &&
       other.at == at &&
       other.title == title &&
+      other.body == body &&
       other.repeat == repeat &&
       other.noteId == noteId;
 
   @override
-  int get hashCode => Object.hash(id, at, title, repeat, noteId);
+  int get hashCode => Object.hash(id, at, title, body, repeat, noteId);
 }

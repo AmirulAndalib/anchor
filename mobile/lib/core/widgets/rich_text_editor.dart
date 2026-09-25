@@ -369,6 +369,9 @@ class RichTextEditorState extends State<RichTextEditor>
     return jsonEncode({'ops': ops});
   }
 
+  bool matchesContent(String? content) =>
+      _parseDocument(content).toDelta() == _controller.document.toDelta();
+
   String getPlainText() => _controller.document.toPlainText().trim();
 
   bool get isEmpty => _controller.document.toPlainText().trim().isEmpty;

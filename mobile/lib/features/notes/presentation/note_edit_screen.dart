@@ -168,12 +168,16 @@ class _NoteEditScreenState extends ConsumerState<NoteEditScreen>
   }
 
   bool _matchesEditor(Note note) =>
-      note.title == _titleController.text.trim() &&
-      (note.content ?? '') == _editorContent &&
+      storedTitleOf(note.title) == storedTitleOf(_titleController.text) &&
+      _editorHolds(note.content) &&
       note.isPinned == _isPinned &&
       note.isArchived == _isArchived &&
       note.background == _selectedBackground &&
       _listEquals(note.tagIds, _selectedTagIds);
+
+  bool _editorHolds(String? content) =>
+      _editorKey.currentState?.matchesContent(content) ??
+      (content ?? '') == _editorContent;
 
   /// Deleted for good elsewhere, or a share that was revoked.
   void _handleNoteGone() {
@@ -530,7 +534,7 @@ class _NoteEditScreenState extends ConsumerState<NoteEditScreen>
   /// Creates and persists a note from the current editor fields, flipping the
   /// screen out of "new" mode. Returns the created note's id.
   Future<String> _createNote() async {
-    final title = _titleController.text.trim();
+    final title = storedTitleOf(_titleController.text);
     final content = _editorKey.currentState?.getContent() ?? '';
     final newNote = Note(
       id: const Uuid().v4(),
@@ -565,7 +569,7 @@ class _NoteEditScreenState extends ConsumerState<NoteEditScreen>
       return;
     }
 
-    final title = _titleController.text.trim();
+    final title = storedTitleOf(_titleController.text);
     final editorState = _editorKey.currentState;
     final content = editorState?.getContent() ?? '';
     final plainText = editorState?.getPlainText() ?? '';
@@ -590,8 +594,8 @@ class _NoteEditScreenState extends ConsumerState<NoteEditScreen>
       await _createNote();
     } else if (_existingNote != null) {
       final tagsChanged = !_listEquals(_existingNote!.tagIds, _selectedTagIds);
-      final titleChanged = _existingNote!.title != title;
-      final contentChanged = _existingNote!.content != content;
+      final titleChanged = storedTitleOf(_existingNote!.title) != title;
+      final contentChanged = !_editorHolds(_existingNote!.content);
       final pinChanged = _existingNote!.isPinned != _isPinned;
       final bgChanged = _existingNote!.background != _selectedBackground;
       if (!titleChanged &&
@@ -882,55 +886,49 @@ class _NoteEditScreenState extends ConsumerState<NoteEditScreen>
     final showAttachments =
         !_isNew && (_existingNote != null || widget.noteId != null);
     final reminder = _existingNote?.reminder;
+    final showTitle = !isReadOnly || hasTitleText(_titleController.text);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Padding(
-          padding: EdgeInsets.only(
-            left: dims.editorPadding.left,
-            right: dims.editorPadding.right,
-            top: dims.xs,
-          ),
-          child: GestureDetector(
-            onTap: !isReadOnly
-                ? () {
-                    if (!_titleFocusNode.hasFocus) {
-                      _titleFocusNode.requestFocus();
+        if (showTitle)
+          Padding(
+            padding: EdgeInsets.only(
+              left: dims.editorPadding.left,
+              right: dims.editorPadding.right,
+              top: dims.xs,
+            ),
+            child: GestureDetector(
+              onTap: !isReadOnly
+                  ? () {
+                      if (!_titleFocusNode.hasFocus) {
+                        _titleFocusNode.requestFocus();
+                      }
                     }
-                  }
-                : null,
-            child: TextField(
-              controller: _titleController,
-              focusNode: _titleFocusNode,
-              readOnly: isReadOnly,
-              style: theme.textTheme.headlineSmall?.copyWith(
-                fontSize: 28,
-                fontWeight: FontWeight.bold,
-                color: theme.colorScheme.onSurface,
+                  : null,
+              child: TextField(
+                controller: _titleController,
+                focusNode: _titleFocusNode,
+                readOnly: isReadOnly,
+                style: theme.textTheme.headlineSmall?.copyWith(
+                  fontSize: 28,
+                  fontWeight: FontWeight.bold,
+                  color: theme.colorScheme.onSurface,
+                ),
+                decoration: InputDecoration(
+                  hintText: 'Title',
+                  hintStyle: TextStyle(
+                    color: theme.colorScheme.onSurface.withValues(alpha: 0.3),
+                  ),
+                  border: InputBorder.none,
+                  contentPadding: EdgeInsets.zero,
+                  filled: false,
+                ),
+                textCapitalization: TextCapitalization.sentences,
+                showCursor: _isEditing && !isReadOnly,
               ),
-              decoration: InputDecoration(
-                hintText: isReadOnly ? 'Untitled' : 'Title',
-                hintStyle: isReadOnly
-                    ? theme.textTheme.headlineSmall?.copyWith(
-                        fontSize: 28,
-                        fontWeight: FontWeight.bold,
-                        color: theme.colorScheme.onSurface,
-                      )
-                    : TextStyle(
-                        color: theme.colorScheme.onSurface.withValues(
-                          alpha: 0.3,
-                        ),
-                      ),
-                border: InputBorder.none,
-                contentPadding: EdgeInsets.zero,
-                filled: false,
-              ),
-              textCapitalization: TextCapitalization.sentences,
-              showCursor: _isEditing && !isReadOnly,
             ),
           ),
-        ),
         if (showTags)
           TagSelector(
             selectedTagIds: _selectedTagIds,

@@ -2,6 +2,7 @@
 
 import type { RefObject } from "react";
 import { Input } from "@/components/ui/input";
+import { hasTitle } from "@/features/notes/title";
 import { TagSelector } from "@/features/tags";
 import { cn } from "@/lib/utils";
 import { AttachmentsCollapsible } from "../attachments";
@@ -51,23 +52,25 @@ export function NoteEditorContent({
     <div className="flex-1 relative">
       <div className="relative max-w-3xl mx-auto w-full px-4 lg:px-6 py-8">
         {/* Title */}
-        <Input
-          ref={titleInputRef}
-          value={isReadOnly ? title || "Untitled" : title}
-          onChange={(e) => !isReadOnly && onTitleChange(e.target.value)}
-          placeholder="Title"
-          disabled={isTrashed}
-          readOnly={isReadOnly}
-          className={cn(
-            "bg-transparent! border-0 shadow-none rounded-none",
-            "px-0 h-auto py-2 mb-2",
-            "text-3xl lg:text-4xl font-bold",
-            "placeholder:text-muted-foreground/40",
-            "focus-visible:ring-0 focus-visible:ring-offset-0 focus-visible:border-0",
-            isReadOnly && "cursor-default",
-            !isTrashed && isReadOnly && "text-foreground",
-          )}
-        />
+        {(!isReadOnly || hasTitle(title)) && (
+          <Input
+            ref={titleInputRef}
+            value={title}
+            onChange={(e) => !isReadOnly && onTitleChange(e.target.value)}
+            placeholder="Title"
+            disabled={isTrashed}
+            readOnly={isReadOnly}
+            className={cn(
+              "bg-transparent! border-0 shadow-none rounded-none",
+              "px-0 h-auto py-2 mb-2",
+              "text-3xl lg:text-4xl font-bold",
+              "placeholder:text-muted-foreground/40",
+              "focus-visible:ring-0 focus-visible:ring-offset-0 focus-visible:border-0",
+              isReadOnly && "cursor-default",
+              !isTrashed && isReadOnly && "text-foreground",
+            )}
+          />
+        )}
 
         {/* Tags */}
         {showTags && (

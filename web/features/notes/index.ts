@@ -11,5 +11,6 @@ export * from "./quill-checklist";
 export * from "./reminder";
 export * from "./save-queue";
 export * from "./sort";
+export * from "./title";
 export * from "./types";
 export * from "./undo-shortcuts";

@@ -56,6 +56,14 @@ class NoteCard extends ConsumerWidget {
     final theme = Theme.of(context);
     final dims = context.dims;
     final hasImages = note.imagePreviewData.isNotEmpty;
+    final hasContent = note.content != null && note.content!.isNotEmpty;
+    final showBadge = isSelectionMode && !hasImages;
+    final showPin = !isSelectionMode && !hasImages && note.isPinned;
+    final showTopRow = note.hasTitle || hasContent || showBadge || showPin;
+    final preview = QuillPreview(
+      content: note.content,
+      maxLines: _previewMaxLines,
+    );
 
     final cardColor = note.background != null
         ? NoteBackground.resolveColor(context, note.background)
@@ -104,47 +112,45 @@ class NoteCard extends ConsumerWidget {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Row(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            if (isSelectionMode && !hasImages) ...[
-                              _SelectionBadge(isSelected: isSelected),
-                              SizedBox(width: dims.sm),
-                            ],
-                            Expanded(
-                              child: Text(
-                                note.displayTitle,
-                                style: theme.textTheme.titleMedium?.copyWith(
-                                  fontSize: 18,
-                                  fontWeight: FontWeight.bold,
-                                  letterSpacing: -0.3,
+                        if (showTopRow)
+                          Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              if (showBadge) ...[
+                                _SelectionBadge(isSelected: isSelected),
+                                SizedBox(width: dims.sm),
+                              ],
+                              Expanded(
+                                child: note.hasTitle
+                                    ? Text(
+                                        note.title,
+                                        style: theme.textTheme.titleMedium
+                                            ?.copyWith(
+                                              fontSize: 18,
+                                              fontWeight: FontWeight.bold,
+                                              letterSpacing: -0.3,
+                                            ),
+                                        maxLines: 2,
+                                        overflow: TextOverflow.ellipsis,
+                                      )
+                                    : preview,
+                              ),
+                              if (showPin) ...[
+                                SizedBox(width: dims.xs),
+                                Icon(
+                                  LucideIcons.pin,
+                                  size: AppIconSizes.sm,
+                                  color: theme.colorScheme.primary,
                                 ),
-                                maxLines: 2,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            ),
-                            if (!isSelectionMode &&
-                                !hasImages &&
-                                note.isPinned) ...[
-                              SizedBox(width: dims.xs),
-                              Icon(
-                                LucideIcons.pin,
-                                size: AppIconSizes.sm,
-                                color: theme.colorScheme.primary,
-                              ),
+                              ],
                             ],
-                          ],
-                        ),
-                        if (note.content != null &&
-                            note.content!.isNotEmpty) ...[
-                          SizedBox(height: dims.noteCardTitleGap),
-                          QuillPreview(
-                            content: note.content,
-                            maxLines: _previewMaxLines,
                           ),
+                        if (note.hasTitle && hasContent) ...[
+                          SizedBox(height: dims.noteCardTitleGap),
+                          preview,
                         ],
                         if (note.tagIds.isNotEmpty) ...[
-                          SizedBox(height: dims.noteCardTagGap),
+                          if (showTopRow) SizedBox(height: dims.noteCardTagGap),
                           tagsAsync.when(
                             data: (allTags) {
                               final userNoteTags = allTags

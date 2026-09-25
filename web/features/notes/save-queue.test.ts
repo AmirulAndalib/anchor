@@ -4,10 +4,12 @@ import {
   type NoteDraft,
   type NoteSaveQueueHandlers,
   noteDraftsEqual,
+  noteToDraft,
   reminderUpdate,
   type SaveFailure,
   type SaveOutcome,
 } from "./save-queue";
+import { draftTitle } from "./title";
 import type { Note } from "./types";
 
 function makeNote(version: number, overrides: Partial<Note> = {}): Note {
@@ -69,6 +71,22 @@ function deferred<T>() {
   });
   return { promise, resolve };
 }
+
+describe("noteToDraft", () => {
+  it("leaves an untouched note with a spaced title unchanged", () => {
+    const stored = noteToDraft(makeNote(1, { title: "Renovierung " }));
+
+    expect(noteDraftsEqual(stored, makeDraft(draftTitle("Renovierung ")))).toBe(
+      true,
+    );
+  });
+
+  it("leaves an untouched note with a blank title unchanged", () => {
+    const stored = noteToDraft(makeNote(1, { title: "   " }));
+
+    expect(noteDraftsEqual(stored, makeDraft(draftTitle("")))).toBe(true);
+  });
+});
 
 describe("noteDraftsEqual", () => {
   it("ignores the order tags were picked in", () => {

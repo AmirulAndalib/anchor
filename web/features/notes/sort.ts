@@ -11,7 +11,7 @@ export const compareNotes =
   (a: SortableNote, b: SortableNote) => {
     let comparison = 0;
     if (sortBy === "title") {
-      comparison = a.title.localeCompare(b.title);
+      comparison = a.title.trim().localeCompare(b.title.trim());
     } else if (sortBy === "updatedAt") {
       comparison =
         new Date(a.updatedAt).getTime() - new Date(b.updatedAt).getTime();

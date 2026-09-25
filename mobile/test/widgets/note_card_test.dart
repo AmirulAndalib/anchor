@@ -6,6 +6,7 @@ import 'package:anchor/features/tags/presentation/tags_controller.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 void main() {
   Note noteWith(NoteReminder? reminder) => Note(
@@ -73,6 +74,38 @@ void main() {
     );
 
     expect(find.textContaining('· Yearly'), findsOneWidget);
+  });
+
+  testWidgets('a note with no title leads with its text', (tester) async {
+    await pumpCard(
+      tester,
+      const Note(
+        id: 'n1',
+        title: '  ',
+        content: '{"ops":[{"insert":"Buy milk\\n"}]}',
+      ),
+      160,
+    );
+
+    expect(find.text('Buy milk', findRichText: true), findsOneWidget);
+    expect(find.text('Untitled'), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('a pinned note with no title keeps its pin', (tester) async {
+    await pumpCard(
+      tester,
+      const Note(
+        id: 'n1',
+        title: '',
+        content: '{"ops":[{"insert":"Buy milk\\n"}]}',
+        isPinned: true,
+      ),
+      160,
+    );
+
+    expect(find.byIcon(LucideIcons.pin), findsOneWidget);
+    expect(find.text('Buy milk', findRichText: true), findsOneWidget);
   });
 
   testWidgets('no reminder still lays out', (tester) async {

@@ -121,9 +121,11 @@ void main() {
     NoteState state = NoteState.active,
     bool isArchived = false,
     String title = 'Groceries',
+    String? content,
   }) => Note(
     id: id,
     title: title,
+    content: content,
     state: state,
     isArchived: isArchived,
     reminderSlot: slot,
@@ -142,6 +144,30 @@ void main() {
     expect(desired.single.at, DateTime(2026, 9, 4, 18));
     expect(desired.single.noteId, 'n1');
     expect(desired.single.title, 'Groceries');
+  });
+
+  test('heads a note with no title with its first line of text', () {
+    final desired = desiredReminders([
+      note(
+        id: 'n1',
+        slot: 1,
+        remindAt: '2026-09-04T18:00',
+        title: '  ',
+        content: '{"ops":[{"insert":"\\nBuy milk\\nand eggs\\n"}]}',
+      ),
+    ], now: now);
+
+    expect(desired.single.title, 'Buy milk');
+    expect(desired.single.body, 'Reminder');
+  });
+
+  test('heads a note with no title or text with just "Reminder"', () {
+    final desired = desiredReminders([
+      note(id: 'n1', slot: 1, remindAt: '2026-09-04T18:00', title: ''),
+    ], now: now);
+
+    expect(desired.single.title, 'Reminder');
+    expect(desired.single.body, isEmpty);
   });
 
   test('drops a note with no reminder', () {

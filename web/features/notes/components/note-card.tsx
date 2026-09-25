@@ -9,6 +9,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import type { Note } from "@/features/notes";
 import { QuillPreview } from "@/features/notes";
 import { isReminderPast, reminderLabel } from "@/features/notes/reminder";
+import { hasTitle } from "@/features/notes/title";
 import { cn } from "@/lib/utils";
 import { NoteBackground } from "./backgrounds";
 import { ListImageThumbnail, NoteCardImages } from "./note-card-images";
@@ -72,6 +73,7 @@ export function NoteCard({
   };
 
   const previewMaxLines = viewMode === "list" ? 2 : viewMode === "grid" ? 4 : 6;
+  const hasImages = !!note.imagePreviewIds?.length;
 
   // Calculate stagger delay (max 500ms for first 10 items)
   const staggerDelay = Math.min(index * 50, 500);
@@ -136,9 +138,11 @@ export function NoteCard({
 
                 <div className="flex-1 min-w-0">
                   {/* Title */}
-                  <h3 className="font-semibold text-base leading-tight mb-1.5 line-clamp-1 group-hover:text-accent transition-colors duration-200">
-                    {note.title || "Untitled"}
-                  </h3>
+                  {hasTitle(note.title) && (
+                    <h3 className="font-semibold text-base leading-tight mb-1.5 line-clamp-1 group-hover:text-accent transition-colors duration-200">
+                      {note.title}
+                    </h3>
+                  )}
 
                   {/* Content Preview */}
                   <QuillPreview
@@ -296,20 +300,26 @@ export function NoteCard({
             )}
 
             {/* Title */}
-            <h3
-              className={cn(
-                "font-bold leading-tight mb-2 pr-8 line-clamp-2 group-hover:text-accent transition-colors duration-200",
-                viewMode === "grid" ? "text-base" : "text-lg",
-              )}
-            >
-              {note.title || "Untitled"}
-            </h3>
+            {hasTitle(note.title) && (
+              <h3
+                className={cn(
+                  "font-bold leading-tight mb-2 pr-8 line-clamp-2 group-hover:text-accent transition-colors duration-200",
+                  viewMode === "grid" ? "text-base" : "text-lg",
+                )}
+              >
+                {note.title}
+              </h3>
+            )}
 
             {/* Content Preview */}
             <QuillPreview
               content={note.content}
               maxLines={previewMaxLines}
-              className={cn("mb-3", viewMode === "grid" && "flex-1 min-h-0")}
+              className={cn(
+                "mb-3",
+                viewMode === "grid" && "flex-1 min-h-0",
+                !hasTitle(note.title) && !hasImages && "pr-8",
+              )}
             />
 
             {/* Tags */}

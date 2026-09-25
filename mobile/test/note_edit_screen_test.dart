@@ -110,6 +110,10 @@ void main() {
     await tester.pump();
   }
 
+  final titleField = find.byWidgetPredicate(
+    (w) => w is TextField && w.decoration?.hintText == 'Title',
+  );
+
   QuillController editorController(WidgetTester tester) =>
       tester.state<RichTextEditorState>(find.byType(RichTextEditor)).controller;
 
@@ -145,9 +149,6 @@ void main() {
   ) async {
     await pumpScreen(tester);
 
-    final titleField = find.byWidgetPredicate(
-      (w) => w is TextField && w.decoration?.hintText == 'Title',
-    );
     await tester.enterText(titleField, 'My title');
     await tester.pump(const Duration(seconds: 3));
 
@@ -175,6 +176,100 @@ void main() {
 
     verifyNever(() => notesRepo.updateNote(any()));
     verifyNever(() => notesRepo.createNote(any()));
+  });
+
+  testWidgets('leaving an untouched note with a spaced title saves nothing', (
+    tester,
+  ) async {
+    const note = Note(
+      id: 'n1',
+      title: 'Renovierung ',
+      content: '{"ops":[{"insert":"hi\\n"}]}',
+    );
+    await pumpScreen(tester, note: note);
+
+    await tester.tap(find.byIcon(LucideIcons.chevronLeft));
+    await tester.pumpAndSettle();
+
+    verifyNever(() => notesRepo.updateNote(any()));
+  });
+
+  testWidgets('a read-only note with no title shows no title', (tester) async {
+    const note = Note(
+      id: 'n1',
+      title: '',
+      content: '{"ops":[{"insert":"hi\\n"}]}',
+      state: NoteState.trashed,
+    );
+    await pumpScreen(tester, note: note);
+
+    expect(titleField, findsNothing);
+    expect(find.text('Untitled'), findsNothing);
+  });
+
+  testWidgets('keeps a title exactly as typed', (tester) async {
+    const note = Note(
+      id: 'n1',
+      title: 'T',
+      content: '{"ops":[{"insert":"hi\\n"}]}',
+    );
+    await pumpScreen(tester, note: note);
+
+    await tester.enterText(titleField, ' Shopping list ');
+    await tester.pump();
+    await tester.pump(const Duration(seconds: 3));
+
+    final saved =
+        verify(() => notesRepo.updateNote(captureAny())).captured.last as Note;
+    expect(saved.title, ' Shopping list ');
+  });
+
+  testWidgets('saves a title of only spaces as no title', (tester) async {
+    const note = Note(
+      id: 'n1',
+      title: 'T',
+      content: '{"ops":[{"insert":"hi\\n"}]}',
+    );
+    await pumpScreen(tester, note: note);
+
+    await tester.enterText(titleField, '   ');
+    await tester.pump();
+    await tester.pump(const Duration(seconds: 3));
+
+    final saved =
+        verify(() => notesRepo.updateNote(captureAny())).captured.last as Note;
+    expect(saved.title, isEmpty);
+  });
+
+  testWidgets('leaving an untouched imported note with a link saves nothing', (
+    tester,
+  ) async {
+    const note = Note(
+      id: 'n1',
+      title: 'Birdhouse',
+      content:
+          '{"ops":[{"insert":"Build a birdhouse\\n"},{"insert":"\\n"},'
+          '{"insert":"https://example.com","attributes":{"link":"https://example.com"}},'
+          '{"insert":"\\n"}]}',
+    );
+    await pumpScreen(tester, note: note);
+
+    await tester.tap(find.byIcon(LucideIcons.chevronLeft));
+    await tester.pumpAndSettle();
+
+    verifyNever(() => notesRepo.updateNote(any()));
+  });
+
+  testWidgets('leaving an untouched note with no body saves nothing', (
+    tester,
+  ) async {
+    const note = Note(id: 'n1', title: 'Just a title');
+    await pumpScreen(tester, note: note);
+
+    await tester.tap(find.byIcon(LucideIcons.chevronLeft));
+    await tester.pumpAndSettle();
+
+    verifyNever(() => notesRepo.updateNote(any()));
   });
 
   testWidgets('restoring a trashed note reloads its content into the editor', (
@@ -286,9 +381,6 @@ void main() {
     );
     await pumpScreen(tester, note: note);
 
-    final titleField = find.byWidgetPredicate(
-      (w) => w is TextField && w.decoration?.hintText == 'Title',
-    );
     await tester.enterText(titleField, '');
     final controller = editorController(tester);
     controller.replaceText(0, controller.document.length - 1, '', null);

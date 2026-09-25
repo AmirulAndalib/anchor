@@ -40,6 +40,7 @@ import {
   type TimelineEntry,
   timelineEntries,
 } from "../history";
+import { draftTitle } from "../title";
 import type { Note } from "../types";
 import { NoteContentDiff, NoteDiffTitle } from "./note-content-diff";
 
@@ -147,7 +148,7 @@ export function NoteHistorySheet({
   const titleChanged =
     !previewLoading &&
     comparedTitle !== undefined &&
-    comparedTitle !== selectedTitle;
+    draftTitle(comparedTitle) !== draftTitle(selectedTitle);
 
   const hasSelection = !!selected;
   const diff = useMemo<ContentDiff | null>(() => {

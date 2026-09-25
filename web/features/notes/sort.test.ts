@@ -62,6 +62,17 @@ describe("compareNotes", () => {
     ).toEqual(["b", "a"]);
   });
 
+  it("ignores spaces around a title", () => {
+    const notes = [
+      note("z", "2026-08-16T10:00:00.000Z", " Zulu"),
+      note("a", "2026-08-16T10:00:00.000Z", "Alpha "),
+    ];
+
+    expect(
+      [...notes].sort(compareNotes("title", "asc")).map((n) => n.id),
+    ).toEqual(["a", "z"]);
+  });
+
   it("orders a fully tied list the same whatever order it arrives in", () => {
     const tied = "2026-08-16T10:00:00.000Z";
     const ids = ["d", "a", "c", "b"];

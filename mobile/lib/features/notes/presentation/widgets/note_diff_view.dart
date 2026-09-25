@@ -25,29 +25,36 @@ class NoteDiffTitle extends StatelessWidget {
     final replacement = replacedBy;
 
     if (replacement == null) {
+      if (!hasTitleText(title)) return const SizedBox.shrink();
       return Padding(
         padding: EdgeInsets.only(left: noteDiffGutter, bottom: context.dims.sm),
-        child: Text(displayTitleOf(title), style: style),
+        child: Text(title, style: style),
       );
     }
+
+    final showRemoved = hasTitleText(title);
+    final showAdded = hasTitleText(replacement);
+    if (!showRemoved && !showAdded) return const SizedBox.shrink();
 
     return Padding(
       padding: EdgeInsets.only(bottom: context.dims.sm),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _DiffRow(
-            kind: DiffKind.removed,
-            child: Text(
-              displayTitleOf(title),
-              style: style?.copyWith(decoration: TextDecoration.lineThrough),
+          if (showRemoved)
+            _DiffRow(
+              kind: DiffKind.removed,
+              child: Text(
+                title,
+                style: style?.copyWith(decoration: TextDecoration.lineThrough),
+              ),
             ),
-          ),
-          const SizedBox(height: 2),
-          _DiffRow(
-            kind: DiffKind.added,
-            child: Text(displayTitleOf(replacement), style: style),
-          ),
+          if (showRemoved && showAdded) const SizedBox(height: 2),
+          if (showAdded)
+            _DiffRow(
+              kind: DiffKind.added,
+              child: Text(replacement, style: style),
+            ),
         ],
       ),
     );

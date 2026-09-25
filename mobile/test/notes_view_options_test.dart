@@ -44,6 +44,12 @@ void main() {
     expect(order(notes, byTitleDesc), ['n-a', 'n-z']);
   });
 
+  test('title order ignores spaces around a title', () {
+    final spaced = [note('n-z', title: ' Zulu'), note('n-a', title: 'Alpha ')];
+
+    expect(order(spaced, byTitleAsc), ['n-a', 'n-z']);
+  });
+
   test('pinned notes stay on top under every option', () {
     final withPin = [
       ...notes,

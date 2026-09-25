@@ -53,7 +53,7 @@ final class ReminderSchedulerProvider
   }
 }
 
-String _$reminderSchedulerHash() => r'0ab0660c45c335733e27c63239ebdd723ee17eee';
+String _$reminderSchedulerHash() => r'c4b8f1a31776380f38b33d899062fc7ffac3b291';
 
 /// Keeps the OS's pending notifications in step with the reminders in Drift.
 ///

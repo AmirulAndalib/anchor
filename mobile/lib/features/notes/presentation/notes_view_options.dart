@@ -43,8 +43,8 @@ int Function(Note, Note) noteComparator(NotesViewOptions options) {
       SortOption.dateModified => (a.updatedAt ?? DateTime(0)).compareTo(
         b.updatedAt ?? DateTime(0),
       ),
-      SortOption.title => a.title.toLowerCase().compareTo(
-        b.title.toLowerCase(),
+      SortOption.title => a.title.trim().toLowerCase().compareTo(
+        b.title.trim().toLowerCase(),
       ),
     };
 

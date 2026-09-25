@@ -63,9 +63,10 @@ private class NotesRemoteViewsFactory(
         val views = RemoteViews(context.packageName, R.layout.widget_note_item)
         val note = notes.getOrNull(position) ?: return views
 
-        views.setTextViewText(
+        views.setTextViewText(R.id.item_title, note.title)
+        views.setViewVisibility(
             R.id.item_title,
-            note.title.ifBlank { context.getString(R.string.widget_untitled) },
+            if (note.title.isBlank()) View.GONE else View.VISIBLE,
         )
         views.setTextViewText(R.id.item_snippet, note.snippet)
         views.setViewVisibility(

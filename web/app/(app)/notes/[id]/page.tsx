@@ -22,6 +22,7 @@ import {
   createNoteSaveQueue,
   DeleteDialog,
   deleteNote,
+  draftTitle,
   flushNoteUpdate,
   getNote,
   isStoredContentEmpty,
@@ -200,8 +201,7 @@ export default function NoteEditorPage() {
 
   const draft = useMemo<NoteDraft>(
     () => ({
-      // Blank stays blank; cards render the "Untitled" placeholder.
-      title: title.trim(),
+      title: draftTitle(title),
       content,
       isPinned,
       background,

@@ -64,16 +64,21 @@ void main() {
       expect(ids, ['pinned', 'recent', 'older']);
     });
 
-    test(
-      'keeps blank titles empty so the native side applies the fallback',
-      () {
-        final payload = buildHomeWidgetPayload([
-          _note(title: '   '),
-        ], loggedIn: true);
+    test('passes titles through as stored', () {
+      final payload = buildHomeWidgetPayload([
+        _note(title: 'Groceries '),
+      ], loggedIn: true);
 
-        expect((_decode(payload)['notes'] as List).single['title'], '');
-      },
-    );
+      expect((_decode(payload)['notes'] as List).single['title'], 'Groceries ');
+    });
+
+    test('keeps blank titles empty so the native side hides them', () {
+      final payload = buildHomeWidgetPayload([
+        _note(title: '   '),
+      ], loggedIn: true);
+
+      expect((_decode(payload)['notes'] as List).single['title'], '');
+    });
 
     test('turns multi-line quill content into a newline-joined snippet', () {
       final content = jsonEncode({

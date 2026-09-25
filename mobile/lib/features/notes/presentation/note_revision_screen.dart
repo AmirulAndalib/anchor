@@ -174,7 +174,9 @@ class _NoteRevisionScreenState extends ConsumerState<NoteRevisionScreen> {
     final comparedTitle = compared == null ? note?.title : compared.title;
     final comparedContent = compared == null ? note?.content : compared.content;
 
-    final titleChanged = comparedTitle != null && comparedTitle != title;
+    final titleChanged =
+        comparedTitle != null &&
+        storedTitleOf(comparedTitle) != storedTitleOf(title);
     final diff = _diffFor(content, comparedContent);
     final unchanged = revision != null && !titleChanged && diff.isUnchanged
         ? (compared != null

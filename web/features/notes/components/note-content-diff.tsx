@@ -4,6 +4,7 @@ import { CheckSquare, Square } from "lucide-react";
 import type { ReactNode } from "react";
 import type { ContentDiff, DiffKind, LineBlock } from "@/features/notes/diff";
 import { orderedPreviewMarker, type QuillOp } from "@/features/notes/quill";
+import { hasTitle } from "@/features/notes/title";
 import { cn } from "@/lib/utils";
 
 const rowStyles: Record<DiffKind, string> = {
@@ -80,17 +81,19 @@ interface NoteDiffTitleProps {
 
 export function NoteDiffTitle({ title, replacedBy }: NoteDiffTitleProps) {
   if (replacedBy === null) {
+    if (!hasTitle(title)) return null;
     return (
       <h4 className="mb-3 border-l-2 border-transparent pl-3 text-lg font-semibold">
-        {title || "Untitled"}
+        {title}
       </h4>
     );
   }
 
+  if (!hasTitle(title) && !hasTitle(replacedBy)) return null;
   return (
     <div className="mb-3 flex flex-col gap-px text-lg font-semibold">
-      <DiffRow kind="removed">{title || "Untitled"}</DiffRow>
-      <DiffRow kind="added">{replacedBy || "Untitled"}</DiffRow>
+      {hasTitle(title) && <DiffRow kind="removed">{title}</DiffRow>}
+      {hasTitle(replacedBy) && <DiffRow kind="added">{replacedBy}</DiffRow>}
     </div>
   );
 }

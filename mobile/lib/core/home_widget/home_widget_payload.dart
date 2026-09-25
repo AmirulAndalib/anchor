@@ -30,13 +30,12 @@ const _maxSnippetChars = 160;
 /// Serializes notes into the JSON payload rendered by the home-screen widget.
 ///
 /// Notes are expected in display order (pinned first, then most recent).
-/// Titles are passed through as stored; the native side applies the
-/// 'Untitled' display fallback.
+/// Titles are passed through as stored; the native side hides blank ones.
 String buildHomeWidgetPayload(List<Note> notes, {required bool loggedIn}) {
   final items = notes.take(homeWidgetMaxNotes).map((note) {
     return {
       'id': note.id,
-      'title': note.title.trim(),
+      'title': storedTitleOf(note.title),
       'snippet': _truncate(extractPlainTextFromQuillContent(note.content)),
       'pinned': note.isPinned,
     };

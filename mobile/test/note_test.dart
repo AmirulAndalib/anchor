@@ -2,11 +2,10 @@ import 'package:anchor/features/notes/domain/note.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
-  test('displayTitle falls back to Untitled for blank titles', () {
-    // Empty title is canonical in storage; 'Untitled' is display-only.
-    expect(const Note(id: 'n1', title: '').displayTitle, 'Untitled');
-    expect(const Note(id: 'n1', title: '  ').displayTitle, 'Untitled');
-    expect(const Note(id: 'n1', title: 'Groceries').displayTitle, 'Groceries');
+  test('a blank title counts as no title', () {
+    expect(const Note(id: 'n1', title: '').hasTitle, isFalse);
+    expect(const Note(id: 'n1', title: '  ').hasTitle, isFalse);
+    expect(const Note(id: 'n1', title: 'Groceries ').hasTitle, isTrue);
   });
 
   test('permission gates editing', () {

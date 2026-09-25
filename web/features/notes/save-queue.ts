@@ -1,3 +1,4 @@
+import { draftTitle } from "./title";
 import type { Note, NoteReminder, NoteReminderInput } from "./types";
 
 export interface NoteDraft {
@@ -43,7 +44,7 @@ const maxRetryDelayMs = 30_000;
 
 export function noteToDraft(note: Note): NoteDraft {
   return {
-    title: note.title,
+    title: draftTitle(note.title),
     content: note.content || "",
     isPinned: note.isPinned,
     background: note.background || null,

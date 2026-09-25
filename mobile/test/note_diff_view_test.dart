@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+import 'package:anchor/core/theme/app_theme.dart';
 import 'package:anchor/features/notes/domain/note_diff.dart';
 import 'package:anchor/features/notes/presentation/widgets/note_diff_view.dart';
 import 'package:flutter/material.dart';
@@ -24,7 +25,44 @@ Future<void> pumpDiff(WidgetTester tester, ContentDiff diff) =>
       ),
     );
 
+Future<void> pumpTitle(WidgetTester tester, NoteDiffTitle title) =>
+    tester.pumpWidget(
+      MaterialApp(
+        theme: AppTheme.light(),
+        home: Scaffold(body: title),
+      ),
+    );
+
 void main() {
+  testWidgets('a version with no title shows no title', (tester) async {
+    await pumpTitle(tester, const NoteDiffTitle(title: '  '));
+
+    expect(find.byType(Text), findsNothing);
+  });
+
+  testWidgets('a title added where there was none shows only the new one', (
+    tester,
+  ) async {
+    await pumpTitle(
+      tester,
+      const NoteDiffTitle(title: '', replacedBy: 'Groceries'),
+    );
+
+    expect(find.byType(Text), findsOneWidget);
+    expect(find.text('Groceries'), findsOneWidget);
+  });
+
+  testWidgets('a removed title shows only the old one', (tester) async {
+    await pumpTitle(
+      tester,
+      const NoteDiffTitle(title: 'Groceries', replacedBy: ''),
+    );
+
+    expect(find.byType(Text), findsOneWidget);
+    final old = tester.widget<Text>(find.text('Groceries'));
+    expect(old.style?.decoration, TextDecoration.lineThrough);
+  });
+
   testWidgets('each side of the diff numbers its own version of a list', (
     tester,
   ) async {

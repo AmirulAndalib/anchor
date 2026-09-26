@@ -72,23 +72,16 @@ export const api = ky.create({
       },
     ],
     beforeError: [
-      async ({ error }) => {
-        // Extract error message from API response body
+      ({ error }) => {
+        // Show the server's own message when it sends one.
         if (error instanceof HTTPError) {
-          try {
-            const errorBody = (await error.response.json()) as {
-              message?: string | string[];
-            };
-            // Handle both string messages and array of validation errors
-            if (errorBody.message) {
-              if (Array.isArray(errorBody.message)) {
-                error.message = errorBody.message.join(", ");
-              } else {
-                error.message = errorBody.message;
-              }
-            }
-          } catch {
-            // If we can't parse the error body, keep the original message
+          const { message } = (error.data ?? {}) as {
+            message?: string | string[];
+          };
+          if (message) {
+            error.message = Array.isArray(message)
+              ? message.join(", ")
+              : message;
           }
         }
         return error;

@@ -98,7 +98,9 @@ class SyncNoteChange extends SyncChange {
   final String? content;
   final bool isArchived;
   final String? background;
-  final String state;
+
+  /// Sent for a shared note only when it is being removed.
+  final String? state;
   final List<String> tagIds;
   final List<SyncNoteRevision> revisions;
 
@@ -127,7 +129,7 @@ class SyncNoteChange extends SyncChange {
     'content': content,
     'isArchived': isArchived,
     'background': background,
-    'state': state,
+    if (state != null) 'state': state,
     'tagIds': tagIds,
     if (revisions.isNotEmpty)
       'revisions': [for (final revision in revisions) revision.toJson()],

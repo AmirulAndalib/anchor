@@ -45,7 +45,7 @@ export function NoteEditorContent({
   onContentChange,
   onTagsChange,
 }: NoteEditorContentProps) {
-  const showTags = !isReadOnly || selectedTagIds.length > 0;
+  const showTags = !isTrashed || selectedTagIds.length > 0;
   const showAttachments = canUpload || (attachmentCount ?? 0) > 0;
 
   return (
@@ -78,7 +78,7 @@ export function NoteEditorContent({
             <TagSelector
               selectedTagIds={selectedTagIds}
               onTagsChange={onTagsChange}
-              readOnly={isReadOnly}
+              readOnly={isTrashed}
             />
           </div>
         )}

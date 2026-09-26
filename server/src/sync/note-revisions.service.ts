@@ -99,6 +99,18 @@ export class NoteRevisionsService {
     rejected: RejectedNoteContent,
     authorUserId: string,
   ): Promise<void> {
+    const known = await db.noteRevision.findFirst({
+      where: {
+        noteId: rejected.noteId,
+        title: rejected.title,
+        content: rejected.content,
+      },
+      select: { id: true },
+    });
+    if (known) {
+      return;
+    }
+
     await db.noteRevision.create({
       data: {
         noteId: rejected.noteId,

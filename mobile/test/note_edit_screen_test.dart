@@ -292,7 +292,7 @@ void main() {
     await pumpScreen(tester, note: trashed);
     expect(find.text('old content', findRichText: true), findsOneWidget);
 
-    await tester.tap(find.byTooltip('Restore Note'));
+    await tester.tap(find.byTooltip('Restore note'));
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 300));
     await tester.tap(find.text('Restore'));
@@ -441,5 +441,66 @@ void main() {
 
     verify(() => notesRepo.setReminder('n1', any())).called(1);
     expect(find.byType(ReminderChip), findsOneWidget);
+  });
+
+  testWidgets('pinning saves only the pin', (tester) async {
+    when(
+      () => notesRepo.bulkSetPinned(any(), any()),
+    ).thenAnswer((_) async => 1);
+
+    await pumpScreen(
+      tester,
+      note: const Note(id: 'n1', title: 'Groceries'),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byIcon(LucideIcons.pin));
+    await tester.pump(const Duration(seconds: 3));
+
+    verify(() => notesRepo.bulkSetPinned(['n1'], true)).called(1);
+    verifyNever(() => notesRepo.updateNote(any()));
+  });
+
+  group('a note shared for viewing', () {
+    const note = Note(
+      id: 'n1',
+      title: 'Groceries',
+      permission: NotePermission.viewer,
+    );
+
+    testWidgets('pins it for them without saving the note', (tester) async {
+      when(
+        () => notesRepo.bulkSetPinned(any(), any()),
+      ).thenAnswer((_) async => 1);
+
+      await pumpScreen(tester, note: note);
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byIcon(LucideIcons.pin));
+      await tester.pumpAndSettle();
+
+      verify(() => notesRepo.bulkSetPinned(['n1'], true)).called(1);
+      verifyNever(() => notesRepo.updateNote(any()));
+    });
+
+    testWidgets('sets a reminder for them', (tester) async {
+      when(() => notesRepo.getNote('n1')).thenAnswer((_) async => note);
+      when(() => notesRepo.setReminder(any(), any())).thenAnswer((_) async {});
+
+      await pumpScreen(tester, note: note);
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byIcon(LucideIcons.ellipsisVertical));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byIcon(LucideIcons.bell));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Tomorrow'));
+      await tester.pump();
+      await tester.tap(find.text('Save'));
+      await tester.pumpAndSettle();
+
+      verify(() => notesRepo.setReminder('n1', any())).called(1);
+      verifyNever(() => notesRepo.updateNote(any()));
+    });
   });
 }

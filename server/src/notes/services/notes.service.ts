@@ -14,8 +14,10 @@ import {
 import type { Prisma } from 'src/generated/prisma/client';
 import { NoteAccessService } from './note-access.service';
 import { NoteAttachmentsService } from './note-attachments.service';
+import { NoteSharesService } from './note-shares.service';
 import { transformNote } from '../utils/note-transformer.util';
 import { ownedTagIds, reconcileUserTags } from '../utils/note-tags.util';
+import { setNoteArchive } from '../utils/note-archive.util';
 import {
   guardedNoteFieldsChanged,
   noteContentChanged,
@@ -33,6 +35,8 @@ import {
   NOTE_INCLUDE_SHARES,
   NOTE_INCLUDE_ATTACHMENT_COUNT,
   NOTE_LIST_ORDER,
+  noteAccessibleBy,
+  noteArchiveInclude,
   notePinInclude,
   noteReminderInclude,
 } from '../constants/notes.constants';
@@ -45,12 +49,14 @@ export class NotesService {
     private prisma: PrismaService,
     private noteAccessService: NoteAccessService,
     private noteAttachmentsService: NoteAttachmentsService,
+    private noteSharesService: NoteSharesService,
     private syncEmitter: SyncEmitterService,
     private noteRevisions: NoteRevisionsService,
   ) {}
 
   async create(userId: string, createNoteDto: CreateNoteDto) {
-    const { tagIds, isPinned, reminder, ...noteData } = createNoteDto;
+    const { tagIds, isPinned, isArchived, reminder, ...noteData } =
+      createNoteDto;
     const validTagIds = await this.filterOwnedTagIds(userId, tagIds);
 
     const note = await this.prisma.$transaction(async (tx) => {
@@ -69,6 +75,7 @@ export class NotesService {
       });
 
       await this.setNotePin(tx, userId, created.id, isPinned);
+      await setNoteArchive(tx, userId, created.id, isArchived);
       const saved = await this.setNoteReminder(
         tx,
         userId,
@@ -92,6 +99,7 @@ export class NotesService {
       {
         ...note.created,
         pins: isPinned ? [{ userId }] : [],
+        archives: isArchived ? [{ userId }] : [],
         reminders: note.saved?.row ? [note.saved.row] : [],
       },
       userId,
@@ -109,19 +117,10 @@ export class NotesService {
     const notes = await this.prisma.note.findMany({
       where: {
         AND: [
-          {
-            OR: [
-              { userId }, // Own notes
-              {
-                sharedWith: {
-                  some: { sharedWithUserId: userId, isDeleted: false },
-                },
-              }, // Shared notes
-            ],
-          },
+          noteAccessibleBy(userId),
           {
             state: NoteState.active,
-            isArchived: false,
+            archives: { none: { userId } },
           },
           ...(tagId
             ? [
@@ -156,6 +155,7 @@ export class NotesService {
         ...NOTE_INCLUDE_SHARES,
         ...NOTE_INCLUDE_ATTACHMENT_COUNT,
         ...notePinInclude(userId),
+        ...noteArchiveInclude(userId),
         ...noteReminderInclude(userId),
       },
       orderBy: NOTE_LIST_ORDER,
@@ -179,6 +179,7 @@ export class NotesService {
         ...NOTE_INCLUDE_SHARES,
         ...NOTE_INCLUDE_ATTACHMENT_COUNT,
         ...notePinInclude(userId),
+        ...noteArchiveInclude(userId),
         ...noteReminderInclude(userId),
       },
     });
@@ -195,15 +196,18 @@ export class NotesService {
   }
 
   async update(userId: string, id: string, updateNoteDto: UpdateNoteDto) {
-    // Check access - owner or editor permission required
+    const { tagIds, isPinned, isArchived, reminder, baseVersion, ...noteData } =
+      updateNoteDto;
+
+    // Pins, archive, reminders and tags only need read access.
+    const editsNote = Object.values(noteData).some(
+      (value) => value !== undefined,
+    );
     await this.noteAccessService.ensureNoteAccess(
       userId,
       id,
-      NoteSharePermission.editor,
+      editsNote ? NoteSharePermission.editor : undefined,
     );
-
-    const { tagIds, isPinned, reminder, baseVersion, ...noteData } =
-      updateNoteDto;
 
     const outcome = await this.prisma.$transaction(async (tx) => {
       const prior = await tx.note.findUniqueOrThrow({ where: { id } });
@@ -216,6 +220,11 @@ export class NotesService {
       }
 
       await this.setNotePin(tx, userId, id, isPinned);
+      const archiveChanged = await setNoteArchive(tx, userId, id, isArchived);
+      // Only update the caller's own tags so other users' tags aren't removed.
+      const tagsChanged =
+        tagIds !== undefined &&
+        (await reconcileUserTags(tx, id, userId, tagIds));
       const savedReminder = await this.setNoteReminder(
         tx,
         userId,
@@ -223,27 +232,23 @@ export class NotesService {
         reminder,
       );
 
-      if (noteContentChanged(prior, noteData)) {
-        await this.noteRevisions.recordEdit(tx, prior, userId);
-      }
-      await tx.note.update({
-        where: { id },
-        data: {
-          ...noteData,
-          ...(guardedNoteFieldsChanged(prior, noteData)
-            ? { version: { increment: 1 } }
-            : {}),
-        },
-      });
-
-      // Only update the caller's own tags so other users' tags aren't removed.
-      if (tagIds !== undefined) {
-        await reconcileUserTags(tx, id, userId, tagIds);
+      const noteChanged = guardedNoteFieldsChanged(prior, noteData);
+      if (noteChanged) {
+        if (noteContentChanged(prior, noteData)) {
+          await this.noteRevisions.recordEdit(tx, prior, userId);
+        }
+        await tx.note.update({
+          where: { id },
+          data: { ...noteData, version: { increment: 1 } },
+        });
       }
 
-      const recipients = await this.syncEmitter.noteRecipients(tx, id);
+      const recipients = noteChanged
+        ? await this.syncEmitter.noteRecipients(tx, id)
+        : [];
       await this.syncEmitter.emit(tx, [
         ...noteEmissions(recipients, id),
+        ...(archiveChanged || tagsChanged ? noteEmissions([userId], id) : []),
         ...(isPinned !== undefined ? [pinEmission(userId, id, isPinned)] : []),
         ...(savedReminder?.changed
           ? [reminderEmission(userId, id, !!savedReminder.row)]
@@ -254,7 +259,9 @@ export class NotesService {
         where: { id },
         include: {
           ...NOTE_INCLUDE_TAGS,
+          ...NOTE_INCLUDE_SHARES,
           ...notePinInclude(userId),
+          ...noteArchiveInclude(userId),
           ...noteReminderInclude(userId),
         },
       });
@@ -285,6 +292,7 @@ export class NotesService {
         ...NOTE_INCLUDE_SHARES,
         ...NOTE_INCLUDE_ATTACHMENT_COUNT,
         ...notePinInclude(userId),
+        ...noteArchiveInclude(userId),
         ...noteReminderInclude(userId),
       },
     });
@@ -308,9 +316,16 @@ export class NotesService {
     });
   }
 
-  // Soft delete - moves note to trash (owner only)
+  // Soft delete - the owner moves the note to trash; a sharee leaves it
   async remove(userId: string, id: string) {
-    await this.noteAccessService.verifyNoteOwnership(userId, id);
+    const access = await this.noteAccessService.hasNoteAccess(userId, id);
+    if (!access.hasAccess || access.state === NoteState.deleted) {
+      throw new NotFoundException(ERROR_MESSAGES.NOTE_NOT_FOUND);
+    }
+    if (!access.isOwner) {
+      await this.noteSharesService.leaveShare(userId, id);
+      return { success: true };
+    }
 
     const note = await this.prisma.$transaction(async (tx) => {
       const prior = await tx.note.findUniqueOrThrow({ where: { id } });
@@ -328,6 +343,7 @@ export class NotesService {
         include: {
           ...NOTE_INCLUDE_TAGS,
           ...notePinInclude(userId),
+          ...noteArchiveInclude(userId),
           ...noteReminderInclude(userId),
         },
       });
@@ -362,6 +378,7 @@ export class NotesService {
         include: {
           ...NOTE_INCLUDE_TAGS,
           ...notePinInclude(userId),
+          ...noteArchiveInclude(userId),
           ...noteReminderInclude(userId),
         },
       });
@@ -392,6 +409,7 @@ export class NotesService {
         include: {
           ...NOTE_INCLUDE_TAGS,
           ...notePinInclude(userId),
+          ...noteArchiveInclude(userId),
           ...noteReminderInclude(userId),
         },
       });
@@ -414,6 +432,7 @@ export class NotesService {
         ...NOTE_INCLUDE_TAGS,
         ...NOTE_INCLUDE_ATTACHMENT_COUNT,
         ...notePinInclude(userId),
+        ...noteArchiveInclude(userId),
         ...noteReminderInclude(userId),
       },
     });
@@ -425,15 +444,17 @@ export class NotesService {
   async findArchived(userId: string) {
     const notes = await this.prisma.note.findMany({
       where: {
-        userId,
+        ...noteAccessibleBy(userId),
         state: NoteState.active,
-        isArchived: true,
+        archives: { some: { userId } },
       },
       orderBy: NOTE_LIST_ORDER,
       include: {
         ...NOTE_INCLUDE_TAGS,
+        ...NOTE_INCLUDE_SHARES,
         ...NOTE_INCLUDE_ATTACHMENT_COUNT,
         ...notePinInclude(userId),
+        ...noteArchiveInclude(userId),
         ...noteReminderInclude(userId),
       },
     });
@@ -539,110 +560,77 @@ export class NotesService {
     };
   }
 
-  // Bulk delete - moves multiple notes to trash (owner only)
+  // Bulk delete - owned notes move to trash, shared ones are left
   async bulkRemove(userId: string, noteIds: string[]) {
-    // Verify all notes belong to user (owner only)
     const notes = await this.prisma.note.findMany({
       where: {
         id: { in: noteIds },
-        userId,
         state: { not: NoteState.deleted },
+        ...noteAccessibleBy(userId),
       },
+      select: { id: true, userId: true },
     });
+    const ownedIds = notes
+      .filter((note) => note.userId === userId)
+      .map((note) => note.id);
+    const sharedIds = notes
+      .filter((note) => note.userId !== userId)
+      .map((note) => note.id);
 
-    if (notes.length !== noteIds.length) {
-      throw new NotFoundException(
-        'One or more notes not found or you do not have permission',
-      );
+    if (ownedIds.length > 0) {
+      await this.prisma.$transaction(async (tx) => {
+        await tx.note.updateMany({
+          where: { id: { in: ownedIds } },
+          data: {
+            state: NoteState.trashed,
+            version: { increment: 1 },
+            stateChangedAt: new Date(),
+          },
+        });
+        const recipientsByNote = await this.syncEmitter.notesRecipients(
+          tx,
+          ownedIds,
+        );
+        await this.syncEmitter.emit(
+          tx,
+          ownedIds.flatMap((id) =>
+            noteEmissions(recipientsByNote.get(id) ?? [], id),
+          ),
+        );
+      });
     }
 
-    await this.prisma.$transaction(async (tx) => {
-      await tx.note.updateMany({
-        where: {
-          id: { in: noteIds },
-          userId,
-        },
-        data: {
-          state: NoteState.trashed,
-          version: { increment: 1 },
-          stateChangedAt: new Date(),
-        },
-      });
-      const recipientsByNote = await this.syncEmitter.notesRecipients(
-        tx,
-        noteIds,
-      );
-      await this.syncEmitter.emit(
-        tx,
-        noteIds.flatMap((id) =>
-          noteEmissions(recipientsByNote.get(id) ?? [], id),
-        ),
-      );
-    });
+    for (const id of sharedIds) {
+      await this.noteSharesService.leaveShare(userId, id);
+    }
 
-    return { count: noteIds.length };
+    return { count: notes.length };
   }
 
-  // Bulk archive (owner only)
+  // Bulk archive - per-user, works for owned and shared notes
   async bulkArchive(userId: string, noteIds: string[]) {
-    // Verify all notes belong to user (owner only)
-    const notes = await this.prisma.note.findMany({
-      where: {
-        id: { in: noteIds },
-        userId,
-        state: { not: NoteState.deleted },
-      },
-    });
-
-    if (notes.length !== noteIds.length) {
-      throw new NotFoundException(
-        'One or more notes not found or you do not have permission',
-      );
+    const accessibleIds = await this.accessibleNoteIds(userId, noteIds);
+    if (accessibleIds.length === 0) {
+      return { count: 0 };
     }
 
     await this.prisma.$transaction(async (tx) => {
-      await tx.note.updateMany({
-        where: {
-          id: { in: noteIds },
-          userId,
-        },
-        data: { isArchived: true, version: { increment: 1 } },
+      await tx.noteArchive.createMany({
+        data: accessibleIds.map((noteId) => ({ userId, noteId })),
+        skipDuplicates: true,
       });
-      const recipientsByNote = await this.syncEmitter.notesRecipients(
-        tx,
-        noteIds,
-      );
       await this.syncEmitter.emit(
         tx,
-        noteIds.flatMap((id) =>
-          noteEmissions(recipientsByNote.get(id) ?? [], id),
-        ),
+        accessibleIds.flatMap((noteId) => noteEmissions([userId], noteId)),
       );
     });
 
-    return { count: noteIds.length };
+    return { count: accessibleIds.length };
   }
 
   // Bulk pin/unpin - per-user, works for owned and shared notes
   async bulkSetPin(userId: string, noteIds: string[], isPinned: boolean) {
-    // Only act on notes the user can actually see (own or shared with them).
-    const accessibleNotes = await this.prisma.note.findMany({
-      where: {
-        id: { in: noteIds },
-        state: { not: NoteState.deleted },
-        OR: [
-          { userId },
-          {
-            sharedWith: {
-              some: { sharedWithUserId: userId, isDeleted: false },
-            },
-          },
-        ],
-      },
-      select: { id: true },
-    });
-
-    const accessibleIds = accessibleNotes.map((note) => note.id);
+    const accessibleIds = await this.accessibleNoteIds(userId, noteIds);
     if (accessibleIds.length === 0) {
       return { count: 0 };
     }
@@ -667,38 +655,17 @@ export class NotesService {
     return { count: accessibleIds.length };
   }
 
-  // Bulk add tags - merges the given tags into each note (owner only)
+  // Bulk add tags - per-user, works for owned and shared notes
   async bulkAddTags(userId: string, noteIds: string[], tagIds: string[]) {
-    // Verify all notes belong to user (owner only)
-    const notes = await this.prisma.note.findMany({
-      where: {
-        id: { in: noteIds },
-        userId,
-        state: { not: NoteState.deleted },
-      },
-      select: { id: true },
-    });
-
-    if (notes.length !== noteIds.length) {
-      throw new NotFoundException(
-        'One or more notes not found or you do not have permission',
-      );
-    }
-
-    // Only attach tags the user owns and that aren't deleted.
-    const tags = await this.prisma.tag.findMany({
-      where: { id: { in: tagIds }, userId, isDeleted: false },
-      select: { id: true },
-    });
-    const validTagIds = tags.map((tag) => tag.id);
-
-    if (validTagIds.length === 0) {
+    const accessibleIds = await this.accessibleNoteIds(userId, noteIds);
+    const validTagIds = await this.filterOwnedTagIds(userId, tagIds);
+    if (accessibleIds.length === 0 || validTagIds.length === 0) {
       return { count: 0 };
     }
 
     // `connect` is idempotent, so each note keeps its existing tags (merge).
     await this.prisma.$transaction(async (tx) => {
-      for (const id of noteIds) {
+      for (const id of accessibleIds) {
         await tx.note.update({
           where: { id },
           data: {
@@ -706,19 +673,25 @@ export class NotesService {
           },
         });
       }
-      const recipientsByNote = await this.syncEmitter.notesRecipients(
-        tx,
-        noteIds,
-      );
       await this.syncEmitter.emit(
         tx,
-        noteIds.flatMap((id) =>
-          noteEmissions(recipientsByNote.get(id) ?? [], id),
-        ),
+        accessibleIds.flatMap((id) => noteEmissions([userId], id)),
       );
     });
 
-    return { count: noteIds.length };
+    return { count: accessibleIds.length };
+  }
+
+  private async accessibleNoteIds(userId: string, noteIds: string[]) {
+    const notes = await this.prisma.note.findMany({
+      where: {
+        id: { in: noteIds },
+        state: { not: NoteState.deleted },
+        ...noteAccessibleBy(userId),
+      },
+      select: { id: true },
+    });
+    return notes.map((note) => note.id);
   }
 
   private async filterOwnedTagIds(userId: string, tagIds?: string[]) {

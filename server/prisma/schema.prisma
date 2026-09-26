@@ -75,6 +75,7 @@ model User {
   refreshTokens        RefreshToken[]
   uploadedAttachments  NoteAttachment[]
   notePins             NotePin[]
+  noteArchives         NoteArchive[]
   syncState            SyncState?
   changeLog            ChangeLog[]
   noteRevisions        NoteRevision[]
@@ -93,7 +94,6 @@ model Note {
   id          String      @id @default(uuid())
   title       String
   content     String?
-  isArchived  Boolean     @default(false)
   background  String?
   state       NoteState   @default(active)
   version     Int         @default(1)
@@ -106,6 +106,7 @@ model Note {
   sharedWith  NoteShare[]
   attachments NoteAttachment[]
   pins        NotePin[]
+  archives    NoteArchive[]
   reminders   NoteReminder[]
   revisions   NoteRevision[]
 
@@ -130,6 +131,17 @@ model NoteReminder {
 }
 
 model NotePin {
+  userId    String
+  noteId    String
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  note      Note     @relation(fields: [noteId], references: [id], onDelete: Cascade)
+
+  @@id([userId, noteId])
+  @@index([noteId])
+}
+
+model NoteArchive {
   userId    String
   noteId    String
   createdAt DateTime @default(now())

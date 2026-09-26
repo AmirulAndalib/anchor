@@ -5,6 +5,7 @@ type MockModel = Record<string, Mock>;
 export interface MockPrismaService {
   note: MockModel;
   notePin: MockModel;
+  noteArchive: MockModel;
   noteReminder: MockModel;
   tag: MockModel;
   noteAttachment: MockModel;
@@ -21,6 +22,7 @@ export function createMockPrisma(): MockPrismaService {
   const prisma: MockPrismaService = {
     note: model('findMany', 'findUnique', 'create', 'update', 'updateMany'),
     notePin: model('create', 'delete', 'deleteMany'),
+    noteArchive: model('create', 'createMany', 'deleteMany'),
     noteReminder: model(
       'findUnique',
       'create',

@@ -11,6 +11,7 @@ class NoteOptionsSheet extends StatelessWidget {
   final bool isReadOnly;
   final bool isNew;
   final bool isOwner;
+  final bool isTrashed;
   final bool isArchived;
   final VoidCallback onTagsTap;
   final VoidCallback onReminderTap;
@@ -27,6 +28,7 @@ class NoteOptionsSheet extends StatelessWidget {
     required this.isReadOnly,
     required this.isNew,
     required this.isOwner,
+    required this.isTrashed,
     required this.isArchived,
     required this.onTagsTap,
     required this.onReminderTap,
@@ -50,11 +52,11 @@ class NoteOptionsSheet extends StatelessWidget {
     final theme = Theme.of(context);
     final dims = context.dims;
 
-    final canManage = !isReadOnly && isOwner && !isNew;
+    final canManage = !isNew && !isTrashed;
     final options = <_OptionSpec>[
-      if (!isReadOnly)
+      if (!isTrashed)
         _OptionSpec(icon: LucideIcons.tags, label: 'Tags', onTap: onTagsTap),
-      if (!isReadOnly)
+      if (!isTrashed)
         _OptionSpec(
           icon: LucideIcons.bell,
           label: 'Reminder',
@@ -86,7 +88,7 @@ class NoteOptionsSheet extends StatelessWidget {
         ),
         _OptionSpec(
           icon: LucideIcons.trash2,
-          label: 'Delete',
+          label: isOwner ? 'Delete' : 'Remove',
           onTap: onDeleteTap,
           isDestructive: true,
         ),

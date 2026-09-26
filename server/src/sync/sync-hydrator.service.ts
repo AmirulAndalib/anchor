@@ -16,6 +16,7 @@ import {
   NOTE_INCLUDE_TAGS,
   NOTE_INCLUDE_SHARES,
   NOTE_INCLUDE_ATTACHMENT_COUNT,
+  noteArchiveInclude,
   notePinInclude,
   noteReminderInclude,
 } from '../notes/constants/notes.constants';
@@ -34,13 +35,13 @@ interface NoteRow {
   title: string;
   content: string | null;
   version: number;
-  isArchived: boolean;
   background: string | null;
   state: NoteState;
   createdAt: Date;
   updatedAt: Date;
   userId: string;
   pins: Array<{ userId: string }>;
+  archives: Array<{ userId: string }>;
   reminders: Array<{
     remindAt: string;
     recurrence: ReminderRecurrence;
@@ -179,6 +180,7 @@ export class SyncHydratorService {
         ...NOTE_INCLUDE_SHARES,
         ...NOTE_INCLUDE_ATTACHMENT_COUNT,
         ...notePinInclude(userId),
+        ...noteArchiveInclude(userId),
         ...noteReminderInclude(userId),
       },
     });

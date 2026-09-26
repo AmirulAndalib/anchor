@@ -59,10 +59,7 @@ describe('notes', () => {
       .send({ title: 'back from the dead' })
       .expect(404);
     await user.http.delete(`/api/notes/${note.id}`).expect(404);
-    await user.http
-      .post('/api/notes/bulk/delete')
-      .send({ noteIds: [note.id] })
-      .expect(404);
+    expect(await user.notes.bulkTrash([note.id])).toEqual({ count: 0 });
 
     expect(
       await ctx.prisma.note.findUniqueOrThrow({ where: { id: note.id } }),
@@ -141,16 +138,14 @@ describe('notes', () => {
     expect(await trashOrder()).toEqual(expected);
   });
 
-  it('notes archived together come back in a stable order', async () => {
-    const ids: string[] = [];
+  it('notes archived together keep their order', async () => {
     for (let i = 0; i < 6; i += 1) {
-      ids.push((await user.notes.create({ title: `note ${i}` })).id);
+      await user.notes.create({ title: `note ${i}` });
     }
+    const listed = (await user.notes.list()).map((n) => n.id);
 
-    await user.notes.bulkArchive(ids);
+    await user.notes.bulkArchive(listed);
 
-    expect((await user.notes.listArchived()).map((n) => n.id)).toEqual(
-      [...ids].sort().reverse(),
-    );
+    expect((await user.notes.listArchived()).map((n) => n.id)).toEqual(listed);
   });
 });

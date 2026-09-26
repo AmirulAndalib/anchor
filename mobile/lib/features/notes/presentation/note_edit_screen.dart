@@ -61,11 +61,14 @@ class _NoteEditScreenState extends ConsumerState<NoteEditScreen>
   List<String> _selectedTagIds = [];
   String? _selectedBackground;
 
-  bool get _isReadOnly {
-    final isActive =
-        _existingNote == null || (_existingNote?.isActive ?? false);
-    return !isActive || _existingNote?.permission == NotePermission.viewer;
-  }
+  bool get _isActive => _existingNote?.isActive ?? true;
+
+  bool get _isReadOnly =>
+      !_isActive || _existingNote?.permission == NotePermission.viewer;
+
+  bool get _savesOnlyPersonal => !(_existingNote?.canEdit ?? true);
+
+  String? get _noteId => widget.noteId ?? _existingNote?.id;
 
   Timer? _autoSaveTimer;
   StreamSubscription<Note?>? _noteWatch;
@@ -297,13 +300,14 @@ class _NoteEditScreenState extends ConsumerState<NoteEditScreen>
   }
 
   Future<void> _togglePinned() async {
-    if (_existingNote?.isActive != true) {
+    final note = _existingNote;
+    if (note == null || !note.isActive) {
       return;
     }
     setState(() {
       _isPinned = !_isPinned;
     });
-    _onContentChanged();
+    await ref.read(notesRepositoryProvider).bulkSetPinned([note.id], _isPinned);
   }
 
   Future<void> _toggleArchived() async {
@@ -315,7 +319,7 @@ class _NoteEditScreenState extends ConsumerState<NoteEditScreen>
       builder: (ctx) => ConfirmDialog(
         icon: LucideIcons.archive,
         iconColor: Theme.of(context).colorScheme.primary,
-        title: wasArchived ? 'Unarchive Note' : 'Archive Note',
+        title: wasArchived ? 'Unarchive note?' : 'Archive note?',
         message: wasArchived
             ? 'This note will be moved back to your notes.'
             : 'This note will be moved to archive.',
@@ -330,9 +334,9 @@ class _NoteEditScreenState extends ConsumerState<NoteEditScreen>
     final repository = ref.read(notesRepositoryProvider);
     try {
       if (wasArchived) {
-        await repository.unarchiveNote(widget.noteId!);
+        await repository.unarchiveNote(_noteId!);
       } else {
-        await repository.archiveNote(widget.noteId!);
+        await repository.archiveNote(_noteId!);
       }
 
       await _loadNote();
@@ -400,7 +404,7 @@ class _NoteEditScreenState extends ConsumerState<NoteEditScreen>
   }
 
   void _showReminderPicker() {
-    if (_isReadOnly) return;
+    if (!_isActive) return;
     AppBottomSheet.show(
       context,
       // The sheet pops before this runs, so the snackbar needs the screen's
@@ -464,13 +468,20 @@ class _NoteEditScreenState extends ConsumerState<NoteEditScreen>
   }
 
   void _showTagPicker() {
-    if (_isReadOnly) return;
+    if (!_isActive) return;
     AppBottomSheet.show(
       context,
       builder: (context) => TagPickerSheet(
         selectedTagIds: _selectedTagIds,
         onTagsChanged: (tagIds) {
+          if (!_isActive) return;
           setState(() => _selectedTagIds = List.from(tagIds));
+          if (_savesOnlyPersonal) {
+            ref
+                .read(notesRepositoryProvider)
+                .setNoteTags(_existingNote!.id, tagIds);
+            return;
+          }
           _onContentChanged();
         },
       ),
@@ -484,6 +495,7 @@ class _NoteEditScreenState extends ConsumerState<NoteEditScreen>
         isReadOnly: _isReadOnly,
         isNew: _isNew,
         isOwner: _existingNote?.isOwner ?? true,
+        isTrashed: _existingNote?.isTrashed ?? false,
         isArchived: _isArchived,
         onTagsTap: _showTagPicker,
         onBackgroundTap: _showColorPicker,
@@ -645,16 +657,18 @@ class _NoteEditScreenState extends ConsumerState<NoteEditScreen>
       return;
     }
 
+    final isOwner = _existingNote?.isOwner ?? true;
     final confirm = await showDialog<bool>(
       context: context,
       builder: (ctx) => ConfirmDialog(
         icon: LucideIcons.trash2,
         iconColor: Theme.of(context).colorScheme.error,
-        title: 'Delete Note',
-        message:
-            'This note will be gone forever. Are you sure you want to let it go?',
-        cancelText: 'Keep',
-        confirmText: 'Delete',
+        title: isOwner ? 'Delete note?' : 'Remove note?',
+        message: isOwner
+            ? 'This note will be moved to trash.'
+            : 'This note will be removed from your notes.',
+        cancelText: 'Cancel',
+        confirmText: isOwner ? 'Delete' : 'Remove',
         confirmColor: Theme.of(context).colorScheme.error,
         onConfirm: () {},
       ),
@@ -662,11 +676,14 @@ class _NoteEditScreenState extends ConsumerState<NoteEditScreen>
 
     if (confirm == true && mounted) {
       try {
-        await ref.read(notesRepositoryProvider).deleteNote(widget.noteId!);
+        await ref.read(notesRepositoryProvider).deleteNote(_noteId!);
         _isDeleted = true;
 
         if (mounted) {
-          AppSnackbar.showSuccess(context, message: 'Note moved to trash');
+          AppSnackbar.showSuccess(
+            context,
+            message: isOwner ? 'Note moved to trash' : 'Note removed',
+          );
           _popOrExit();
         }
       } catch (e) {
@@ -685,8 +702,8 @@ class _NoteEditScreenState extends ConsumerState<NoteEditScreen>
       builder: (ctx) => ConfirmDialog(
         icon: LucideIcons.rotateCcw,
         iconColor: Theme.of(context).colorScheme.primary,
-        title: 'Restore Note',
-        message: 'This note will be restored to your notes.',
+        title: 'Restore note?',
+        message: 'This note will be moved back to your notes.',
         cancelText: 'Cancel',
         confirmText: 'Restore',
         onConfirm: () {},
@@ -696,7 +713,7 @@ class _NoteEditScreenState extends ConsumerState<NoteEditScreen>
     if (confirm != true || !mounted) return;
 
     try {
-      await ref.read(notesRepositoryProvider).restoreNote(widget.noteId!);
+      await ref.read(notesRepositoryProvider).restoreNote(_noteId!);
 
       await _loadNote();
 
@@ -718,11 +735,10 @@ class _NoteEditScreenState extends ConsumerState<NoteEditScreen>
       builder: (ctx) => ConfirmDialog(
         icon: LucideIcons.trash2,
         iconColor: Theme.of(context).colorScheme.error,
-        title: 'Delete Forever',
-        message:
-            'This action cannot be undone. This note will be permanently deleted and cannot be recovered.',
+        title: 'Delete permanently?',
+        message: 'This note will be permanently deleted.',
         cancelText: 'Cancel',
-        confirmText: 'Delete Forever',
+        confirmText: 'Delete permanently',
         confirmColor: Theme.of(context).colorScheme.error,
         onConfirm: () {},
       ),
@@ -730,7 +746,7 @@ class _NoteEditScreenState extends ConsumerState<NoteEditScreen>
 
     if (confirm == true && mounted) {
       try {
-        await ref.read(notesRepositoryProvider).permanentDelete(widget.noteId!);
+        await ref.read(notesRepositoryProvider).permanentDelete(_noteId!);
         _isDeleted = true;
 
         if (mounted) {
@@ -951,7 +967,7 @@ class _NoteEditScreenState extends ConsumerState<NoteEditScreen>
               alignment: Alignment.centerLeft,
               child: ReminderChip(
                 reminder: reminder,
-                onTap: isReadOnly ? null : _showReminderPicker,
+                onTap: _isActive ? _showReminderPicker : null,
               ),
             ),
           ),
@@ -997,24 +1013,23 @@ class _NoteEditScreenState extends ConsumerState<NoteEditScreen>
                 IconButton(
                   icon: const Icon(LucideIcons.rotateCcw),
                   onPressed: _isLoaded && !_isNew ? _restoreNote : null,
-                  tooltip: 'Restore Note',
+                  tooltip: 'Restore note',
                 ),
                 IconButton(
                   icon: const Icon(LucideIcons.trash2),
                   onPressed: _isLoaded && !_isNew ? _permanentDeleteNote : null,
-                  tooltip: 'Delete Forever',
+                  tooltip: 'Delete permanently',
                 ),
               ] else ...[
                 if (_existingNote?.sharedBy != null)
                   _buildSharedByBadge(theme, serverUrl),
-                if (!isReadOnly) _buildPinButton(theme),
+                _buildPinButton(theme),
                 if (_existingNote?.isOwner ?? true) _buildShareButton(theme),
-                if (!isReadOnly || (_existingNote?.isOwner ?? true))
-                  IconButton(
-                    icon: const Icon(LucideIcons.moreVertical),
-                    tooltip: 'More options',
-                    onPressed: _showOptionsSheet,
-                  ),
+                IconButton(
+                  icon: const Icon(LucideIcons.moreVertical),
+                  tooltip: 'More options',
+                  onPressed: _showOptionsSheet,
+                ),
               ],
               SizedBox(width: context.dims.xs),
             ],

@@ -35,7 +35,7 @@ export function RestoreDialog({
             Restore note?
           </DialogTitle>
           <DialogDescription className="pt-2">
-            This note will be restored to your notes.
+            This note will be moved back to your notes.
           </DialogDescription>
         </DialogHeader>
         <DialogFooter className="gap-2 sm:gap-0">

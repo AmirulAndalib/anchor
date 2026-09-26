@@ -31,8 +31,8 @@ class SelectionAppBarActions extends ConsumerWidget {
       builder: (ctx) => ConfirmDialog(
         icon: LucideIcons.archive,
         iconColor: theme.colorScheme.primary,
-        title: 'Archive Notes',
-        message: 'Archive ${ids.length} ${ids.length == 1 ? 'note' : 'notes'}?',
+        title: 'Archive ${_notes(ids.length)}?',
+        message: '${_these(ids.length)} will be moved to archive.',
         cancelText: 'Cancel',
         confirmText: 'Archive',
         onConfirm: () {},
@@ -45,8 +45,7 @@ class SelectionAppBarActions extends ConsumerWidget {
         if (context.mounted) {
           AppSnackbar.showSuccess(
             context,
-            message:
-                '${ids.length} ${ids.length == 1 ? 'note' : 'notes'} archived',
+            message: '${_notes(ids.length)} archived',
           );
         }
       } catch (e) {
@@ -61,6 +60,7 @@ class SelectionAppBarActions extends ConsumerWidget {
     BuildContext context,
     WidgetRef ref,
     List<String> ids,
+    int sharedCount,
   ) async {
     final theme = Theme.of(context);
     final confirmed = await showDialog<bool>(
@@ -68,9 +68,8 @@ class SelectionAppBarActions extends ConsumerWidget {
       builder: (ctx) => ConfirmDialog(
         icon: LucideIcons.trash2,
         iconColor: theme.colorScheme.error,
-        title: 'Delete Notes',
-        message:
-            'Delete ${ids.length} ${ids.length == 1 ? 'note' : 'notes'}? This action cannot be undone.',
+        title: 'Delete ${_notes(ids.length)}?',
+        message: _deleteMessage(ids.length, sharedCount),
         cancelText: 'Cancel',
         confirmText: 'Delete',
         onConfirm: () {},
@@ -83,8 +82,7 @@ class SelectionAppBarActions extends ConsumerWidget {
         if (context.mounted) {
           AppSnackbar.showSuccess(
             context,
-            message:
-                '${ids.length} ${ids.length == 1 ? 'note' : 'notes'} deleted',
+            message: _deletedMessage(ids.length, sharedCount),
           );
         }
       } catch (e) {
@@ -93,6 +91,25 @@ class SelectionAppBarActions extends ConsumerWidget {
         }
       }
     }
+  }
+
+  String _notes(int count) => '$count ${count == 1 ? 'note' : 'notes'}';
+
+  String _these(int count) => count == 1 ? 'This note' : 'These notes';
+
+  String _deleteMessage(int count, int sharedCount) {
+    if (sharedCount == 0) return '${_these(count)} will be moved to trash.';
+    if (sharedCount == count) {
+      return '${_these(count)} will be removed from your notes.';
+    }
+    return 'Notes you own will be moved to trash. '
+        'Shared notes will be removed from your notes.';
+  }
+
+  String _deletedMessage(int count, int sharedCount) {
+    if (sharedCount == 0) return '${_notes(count)} moved to trash';
+    if (sharedCount == count) return '${_notes(count)} removed';
+    return '${_notes(count)} deleted';
   }
 
   Future<void> _handlePin(
@@ -109,9 +126,7 @@ class SelectionAppBarActions extends ConsumerWidget {
       if (context.mounted) {
         AppSnackbar.showSuccess(
           context,
-          message:
-              '${ids.length} ${ids.length == 1 ? 'note' : 'notes'} '
-              '${isPinned ? 'pinned' : 'unpinned'}',
+          message: '${_notes(ids.length)} ${isPinned ? 'pinned' : 'unpinned'}',
         );
       }
     } catch (e) {
@@ -151,7 +166,7 @@ class SelectionAppBarActions extends ConsumerWidget {
       if (context.mounted) {
         AppSnackbar.showSuccess(
           context,
-          message: 'Tagged ${ids.length} ${ids.length == 1 ? 'note' : 'notes'}',
+          message: 'Tagged ${_notes(ids.length)}',
         );
       }
     } catch (e) {
@@ -192,6 +207,12 @@ class SelectionAppBarActions extends ConsumerWidget {
         .toList();
     final allSelectedPinned =
         selectedNotes.isNotEmpty && selectedNotes.every((n) => n.isPinned);
+    final selectedSharedCount = notes.maybeWhen(
+      data: (notesList) => notesList
+          .where((n) => selectedNoteIds.contains(n.id) && !n.isOwner)
+          .length,
+      orElse: () => 0,
+    );
 
     return Row(
       mainAxisSize: MainAxisSize.min,
@@ -230,8 +251,12 @@ class SelectionAppBarActions extends ConsumerWidget {
         if (selectedNoteIds.isNotEmpty)
           IconButton(
             icon: const Icon(LucideIcons.trash2),
-            onPressed: () =>
-                _handleDelete(context, ref, selectedNoteIds.toList()),
+            onPressed: () => _handleDelete(
+              context,
+              ref,
+              selectedNoteIds.toList(),
+              selectedSharedCount,
+            ),
             tooltip: 'Delete',
             color: theme.colorScheme.error,
           ),

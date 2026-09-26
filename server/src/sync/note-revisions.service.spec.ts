@@ -11,8 +11,12 @@ describe('NoteRevisionsService', () => {
     authorUserId: string | null;
     createdAt: Date;
   } | null;
+  let knownText: { id: string } | null;
 
-  const revisionFindFirst = vi.fn(() => Promise.resolve(newest));
+  // Asked by title means "is this text already in the history?"
+  const revisionFindFirst = vi.fn((args: { where: { title?: string } }) =>
+    Promise.resolve(args.where.title === undefined ? newest : knownText),
+  );
   const revisionCreate = vi.fn().mockResolvedValue({});
   const revisionCreateMany = vi.fn().mockResolvedValue({ count: 0 });
 
@@ -34,6 +38,7 @@ describe('NoteRevisionsService', () => {
   beforeEach(() => {
     service = new NoteRevisionsService();
     newest = null;
+    knownText = null;
     vi.clearAllMocks();
   });
 
@@ -123,6 +128,22 @@ describe('NoteRevisionsService', () => {
         cause: RevisionCause.conflict,
       },
     });
+  });
+
+  it('recordConflict skips text the history already holds', async () => {
+    knownText = { id: 'rev-1' };
+
+    await service.recordConflict(
+      tx,
+      { noteId: 'note-1', title: 'old', content: 'known', baseVersion: 2 },
+      'author-1',
+    );
+
+    expect(revisionFindFirst).toHaveBeenCalledWith({
+      where: { noteId: 'note-1', title: 'old', content: 'known' },
+      select: { id: true },
+    });
+    expect(revisionCreate).not.toHaveBeenCalled();
   });
 
   it('recordRestore keeps the content the restore is replacing', async () => {

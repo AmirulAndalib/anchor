@@ -16,6 +16,7 @@ interface DeleteDialogProps {
   onOpenChange: (open: boolean) => void;
   onConfirm: () => void;
   isPending?: boolean;
+  isShared?: boolean;
 }
 
 export function DeleteDialog({
@@ -23,6 +24,7 @@ export function DeleteDialog({
   onOpenChange,
   onConfirm,
   isPending = false,
+  isShared = false,
 }: DeleteDialogProps) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -32,10 +34,12 @@ export function DeleteDialog({
             <div className="w-10 h-10 rounded-full bg-destructive/10 flex items-center justify-center">
               <AlertTriangle className="h-5 w-5 text-destructive" />
             </div>
-            Delete note?
+            {isShared ? "Remove note?" : "Delete note?"}
           </DialogTitle>
           <DialogDescription className="pt-2">
-            This note will be moved to trash. You can restore it within 30 days.
+            {isShared
+              ? "This note will be removed from your notes."
+              : "This note will be moved to trash."}
           </DialogDescription>
         </DialogHeader>
         <DialogFooter className="gap-2 sm:gap-0">
@@ -49,8 +53,10 @@ export function DeleteDialog({
           >
             {isPending ? (
               <Loader2 className="h-4 w-4 animate-spin" />
+            ) : isShared ? (
+              "Remove"
             ) : (
-              "Move to Trash"
+              "Delete"
             )}
           </Button>
         </DialogFooter>

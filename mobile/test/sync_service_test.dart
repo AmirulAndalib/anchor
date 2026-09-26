@@ -576,6 +576,39 @@ void main() {
     verify(() => attachments.deleteLocalFilesForNote('n1')).called(1);
   });
 
+  test(
+    "a shared note's push sends its state only when it is removed",
+    () async {
+      await insertNote(id: 'mine', version: 1, state: 'trashed');
+      await insertNote(
+        id: 'theirs',
+        version: 1,
+        state: 'trashed',
+        permission: 'editor',
+      );
+      await insertNote(
+        id: 'removed',
+        version: 1,
+        state: 'deleted',
+        permission: 'viewer',
+      );
+      stub([response()]);
+
+      await service.run();
+
+      final states = {
+        for (final change in changesOf(0)) change['id']: change['state'],
+      };
+      expect(states, {'mine': 'trashed', 'theirs': null, 'removed': 'deleted'});
+      expect(
+        changesOf(
+          0,
+        ).firstWhere((c) => c['id'] == 'theirs').containsKey('state'),
+        isFalse,
+      );
+    },
+  );
+
   test('a transient failure leaves the note queued', () async {
     await insertNote(id: 'n1', version: 3);
     stub([

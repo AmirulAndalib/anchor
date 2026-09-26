@@ -16,7 +16,7 @@ class TrashScreen extends ConsumerWidget {
       builder: (ctx) => ConfirmDialog(
         icon: LucideIcons.rotateCcw,
         iconColor: Theme.of(context).colorScheme.primary,
-        title: 'Restore Note',
+        title: 'Restore note?',
         message: 'This note will be moved back to your notes.',
         cancelText: 'Cancel',
         confirmText: 'Restore',
@@ -48,11 +48,10 @@ class TrashScreen extends ConsumerWidget {
       builder: (ctx) => ConfirmDialog(
         icon: LucideIcons.trash2,
         iconColor: Theme.of(context).colorScheme.error,
-        title: 'Delete Forever',
-        message:
-            'This note will be permanently deleted and cannot be recovered.',
+        title: 'Delete permanently?',
+        message: 'This note will be permanently deleted.',
         cancelText: 'Cancel',
-        confirmText: 'Delete Forever',
+        confirmText: 'Delete permanently',
         confirmColor: Theme.of(context).colorScheme.error,
         onConfirm: () async {
           try {
@@ -96,7 +95,7 @@ class TrashScreen extends ConsumerWidget {
             color: Theme.of(context).colorScheme.error,
           ),
           onPressed: () => _showPermanentDeleteDialog(context, ref, note),
-          tooltip: 'Delete Forever',
+          tooltip: 'Delete permanently',
           visualDensity: VisualDensity.compact,
         ),
       ],

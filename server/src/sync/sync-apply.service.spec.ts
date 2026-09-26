@@ -3,6 +3,7 @@ import { Logger } from '@nestjs/common';
 import { NoteSharePermission, NoteState } from 'src/generated/prisma/enums';
 import { PrismaService } from '../prisma/prisma.service';
 import { NoteAccessService } from '../notes/services/note-access.service';
+import { NoteSharesService } from '../notes/services/note-shares.service';
 import { SyncApplyService } from './sync-apply.service';
 import type { SyncChange } from './dto/sync-request.dto';
 import type { SyncTagPayload } from './dto/sync-response.dto';
@@ -75,6 +76,17 @@ describe('SyncApplyService', () => {
   const pinUpsert = vi.fn().mockResolvedValue({});
   const pinDeleteMany = vi.fn().mockResolvedValue({ count: 1 });
 
+  const noteUpdate = vi.fn().mockResolvedValue({});
+  const tagFindMany = vi.fn().mockResolvedValue([]);
+
+  let archiveWriteCount: number;
+  const archiveCreateMany = vi.fn(() =>
+    Promise.resolve({ count: archiveWriteCount }),
+  );
+  const archiveDeleteMany = vi.fn(() =>
+    Promise.resolve({ count: archiveWriteCount }),
+  );
+
   let reminderRow: Record<string, unknown> | null;
   let reminderWriteCount: number;
   const reminderFindUnique = vi.fn(() => Promise.resolve(reminderRow));
@@ -93,6 +105,7 @@ describe('SyncApplyService', () => {
     note: {
       findUnique: noteFindUnique,
       create: noteCreate,
+      update: noteUpdate,
       updateMany: noteUpdateMany,
     },
     tag: {
@@ -100,12 +113,16 @@ describe('SyncApplyService', () => {
       findFirst: tagFindFirst,
       create: tagCreate,
       updateMany: tagUpdateMany,
-      findMany: vi.fn().mockResolvedValue([]),
+      findMany: tagFindMany,
     },
     notePin: {
       findUnique: pinFindUnique,
       upsert: pinUpsert,
       deleteMany: pinDeleteMany,
+    },
+    noteArchive: {
+      createMany: archiveCreateMany,
+      deleteMany: archiveDeleteMany,
     },
     noteReminder: {
       findUnique: reminderFindUnique,
@@ -117,19 +134,21 @@ describe('SyncApplyService', () => {
 
   const hasNoteAccess = vi.fn();
   const noteAccess = { hasNoteAccess } as unknown as NoteAccessService;
+  const leaveShare = vi.fn().mockResolvedValue(undefined);
+  const noteShares = { leaveShare } as unknown as NoteSharesService;
 
   const makeFullNote = (overrides: Record<string, unknown> = {}) => ({
     id: 'n1',
     title: 'server title',
     content: 'server content',
     version: 5,
-    isArchived: false,
     background: null,
     state: NoteState.active,
     createdAt: AT,
     updatedAt: AT,
     userId: USER,
     pins: [],
+    archives: [],
     tags: [],
     sharedWith: [],
     _count: { attachments: 0 },
@@ -142,7 +161,6 @@ describe('SyncApplyService', () => {
     title: 'server title',
     content: 'server content',
     version: 5,
-    isArchived: false,
     background: null,
     state: NoteState.active,
     userId: USER,
@@ -179,6 +197,7 @@ describe('SyncApplyService', () => {
     service = new SyncApplyService(
       prisma,
       noteAccess,
+      noteShares,
       asSyncEmitter(emitter),
       asNoteRevisions(revisions),
     );
@@ -188,6 +207,7 @@ describe('SyncApplyService', () => {
     existingTag = null;
     collidingTag = null;
     pinRow = null;
+    archiveWriteCount = 1;
     reminderRow = null;
     reminderWriteCount = 1;
     updateManyCount = 1;
@@ -487,7 +507,7 @@ describe('SyncApplyService', () => {
       expect(revisions.recordClient).not.toHaveBeenCalled();
     });
 
-    it('skips the version bump and revision when nothing guarded changed', async () => {
+    it('writes and emits nothing when nothing guarded changed', async () => {
       noteExists = true;
       priorNote = makePrior();
       hasNoteAccess.mockResolvedValue({
@@ -505,8 +525,9 @@ describe('SyncApplyService', () => {
       ]);
 
       expect(results[0]).toMatchObject({ status: 'applied', version: 5 });
-      expect(noteUpdateMany.mock.calls[0][0].data.version).toBeUndefined();
+      expect(noteUpdateMany).not.toHaveBeenCalled();
       expect(revisions.recordEdit).not.toHaveBeenCalled();
+      expect(emitter.emit).not.toHaveBeenCalled();
     });
 
     it('loses the version-guard race as a conflict, like any stale base', async () => {
@@ -529,7 +550,7 @@ describe('SyncApplyService', () => {
       expect(emitter.emit).not.toHaveBeenCalled();
     });
 
-    it("ignores owner-only fields on an editor's push", async () => {
+    it("keeps an editor's archive and state off the note", async () => {
       noteExists = true;
       priorNote = makePrior({ userId: OTHER });
       hasNoteAccess.mockResolvedValue({
@@ -540,7 +561,7 @@ describe('SyncApplyService', () => {
 
       await service.apply(USER, [
         noteChange({
-          title: 'server title',
+          title: 'editor title',
           content: 'server content',
           isArchived: true,
           state: 'trashed',
@@ -551,6 +572,10 @@ describe('SyncApplyService', () => {
       const { data } = noteUpdateMany.mock.calls[0][0];
       expect('isArchived' in data).toBe(false);
       expect('state' in data).toBe(false);
+      expect(archiveCreateMany).toHaveBeenCalledWith({
+        data: [{ userId: USER, noteId: 'n1' }],
+        skipDuplicates: true,
+      });
     });
 
     it('denies a push for a note the server purged rather than recreating it', async () => {
@@ -840,6 +865,205 @@ describe('SyncApplyService', () => {
       expect(results[0].status).toBe('conflict');
       expect((results[0].serverCopy as SyncTagPayload).id).toBe('t-other');
       expect(tagUpdateMany).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('shared notes', () => {
+    const sharee = (
+      permission: NoteSharePermission,
+      state: NoteState = NoteState.active,
+    ) =>
+      hasNoteAccess.mockResolvedValue({
+        hasAccess: permission === NoteSharePermission.editor,
+        isOwner: false,
+        permission,
+        state,
+      });
+
+    it.each([NoteSharePermission.editor, NoteSharePermission.viewer])(
+      'a %s trashing a shared note leaves it instead',
+      async (permission) => {
+        noteExists = true;
+        sharee(permission);
+
+        const results = await service.apply(USER, [
+          noteChange({ state: 'trashed', baseVersion: 5 }),
+        ]);
+
+        expect(results).toEqual([{ type: 'note', id: 'n1', status: 'denied' }]);
+        expect(leaveShare).toHaveBeenCalledWith(USER, 'n1');
+        expect(noteUpdateMany).not.toHaveBeenCalled();
+      },
+    );
+
+    it("never leaves on a revisions-only push, whatever the row's state", async () => {
+      noteExists = true;
+      priorNote = makePrior({ userId: OTHER });
+      sharee(NoteSharePermission.editor);
+
+      const results = await service.apply(USER, [
+        noteChange({ state: 'trashed', revisionsOnly: true, baseVersion: 5 }),
+      ]);
+
+      expect(results[0].status).toBe('applied');
+      expect(leaveShare).not.toHaveBeenCalled();
+    });
+
+    it('leaves on a deleted push even after the owner trashed the note', async () => {
+      noteExists = true;
+      sharee(NoteSharePermission.editor, NoteState.trashed);
+
+      const results = await service.apply(USER, [
+        noteChange({ state: 'deleted', baseVersion: 5 }),
+      ]);
+
+      expect(results[0].status).toBe('denied');
+      expect(leaveShare).toHaveBeenCalledWith(USER, 'n1');
+    });
+
+    it('leaves nothing when the owner already trashed the note', async () => {
+      noteExists = true;
+      priorNote = makePrior({ userId: OTHER, state: NoteState.trashed });
+      sharee(NoteSharePermission.editor, NoteState.trashed);
+
+      await service.apply(USER, [
+        noteChange({
+          title: 'server title',
+          content: 'server content',
+          state: 'trashed',
+          baseVersion: 5,
+        }),
+      ]);
+
+      expect(leaveShare).not.toHaveBeenCalled();
+    });
+
+    it("a viewer's push tags the note for them alone", async () => {
+      noteExists = true;
+      fullNote = makeFullNote({ userId: OTHER });
+      sharee(NoteSharePermission.viewer);
+      tagFindMany
+        .mockResolvedValueOnce([{ id: 't1' }])
+        .mockResolvedValueOnce([]);
+
+      await service.apply(USER, [
+        noteChange({ title: 'server title', tagIds: ['t1'], baseVersion: 5 }),
+      ]);
+
+      expect(noteUpdate).toHaveBeenCalledWith({
+        where: { id: 'n1' },
+        data: { tags: { connect: [{ id: 't1' }], disconnect: [] } },
+      });
+      expect(emitter.emit).toHaveBeenCalledWith(prisma, [
+        {
+          recipientUserId: USER,
+          entityType: 'note',
+          entityId: 'n1',
+          op: 'upsert',
+        },
+      ]);
+      expect(noteUpdateMany).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('archive', () => {
+    const archiveEmission = {
+      recipientUserId: USER,
+      entityType: 'note',
+      entityId: 'n1',
+      op: 'upsert',
+    };
+
+    it('archives for the pusher alone and leaves the version alone', async () => {
+      noteExists = true;
+      priorNote = makePrior({ userId: OTHER });
+      hasNoteAccess.mockResolvedValue({
+        hasAccess: true,
+        isOwner: false,
+        permission: NoteSharePermission.editor,
+        state: NoteState.active,
+      });
+
+      const results = await service.apply(USER, [
+        noteChange({
+          title: 'server title',
+          content: 'server content',
+          isArchived: true,
+          baseVersion: 5,
+        }),
+      ]);
+
+      expect(results).toEqual([
+        { type: 'note', id: 'n1', status: 'applied', version: 5 },
+      ]);
+      expect(archiveCreateMany).toHaveBeenCalledWith({
+        data: [{ userId: USER, noteId: 'n1' }],
+        skipDuplicates: true,
+      });
+      expect(emitter.emit).toHaveBeenCalledWith(prisma, [archiveEmission]);
+    });
+
+    it('lets a viewer archive and unarchive without touching the note', async () => {
+      noteExists = true;
+      fullNote = makeFullNote({ userId: OTHER });
+      hasNoteAccess.mockResolvedValue({
+        hasAccess: false,
+        isOwner: false,
+        permission: NoteSharePermission.viewer,
+        state: NoteState.active,
+      });
+
+      const archived = await service.apply(USER, [
+        noteChange({ title: 'server title', isArchived: true, baseVersion: 5 }),
+      ]);
+      expect(archived[0].status).toBe('applied');
+      expect(archiveCreateMany).toHaveBeenCalled();
+
+      const unarchived = await service.apply(USER, [
+        noteChange({
+          title: 'server title',
+          isArchived: false,
+          baseVersion: 5,
+        }),
+      ]);
+      expect(unarchived[0].status).toBe('applied');
+      expect(archiveDeleteMany).toHaveBeenCalledWith({
+        where: { userId: USER, noteId: 'n1' },
+      });
+
+      expect(noteUpdateMany).not.toHaveBeenCalled();
+      expect(revisions.recordConflict).not.toHaveBeenCalled();
+      expect(emitter.emit).toHaveBeenCalledTimes(2);
+    });
+
+    it('stays quiet when the archive already matches', async () => {
+      noteExists = true;
+      fullNote = makeFullNote({ userId: OTHER });
+      archiveWriteCount = 0;
+      hasNoteAccess.mockResolvedValue({
+        hasAccess: false,
+        isOwner: false,
+        permission: NoteSharePermission.viewer,
+        state: NoteState.active,
+      });
+
+      await service.apply(USER, [
+        noteChange({ title: 'server title', isArchived: true, baseVersion: 5 }),
+      ]);
+
+      expect(emitter.emit).not.toHaveBeenCalled();
+    });
+
+    it('archives nothing without read access', async () => {
+      noteExists = true;
+      hasNoteAccess.mockResolvedValue({ hasAccess: false, isOwner: false });
+
+      const results = await service.apply(USER, [
+        noteChange({ isArchived: true, baseVersion: 5 }),
+      ]);
+
+      expect(results[0].status).toBe('denied');
+      expect(archiveCreateMany).not.toHaveBeenCalled();
     });
   });
 

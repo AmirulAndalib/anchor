@@ -48,7 +48,6 @@ interface NoteWithIncludes {
   title: string;
   content: string | null;
   version: number;
-  isArchived: boolean;
   background: string | null;
   state: string;
   createdAt: Date;
@@ -56,6 +55,7 @@ interface NoteWithIncludes {
   stateChangedAt?: Date;
   userId: string;
   pins?: Array<{ userId: string }>;
+  archives: Array<{ userId: string }>;
   reminders?: Array<{
     remindAt: string;
     recurrence: ReminderRecurrence;
@@ -89,6 +89,7 @@ export function transformNote(
     _count,
     attachments,
     pins,
+    archives,
     reminders,
     stateChangedAt,
     ...rest
@@ -97,6 +98,7 @@ export function transformNote(
   // Determine if user is owner or shared user
   const isOwner = note.userId === userId;
   const isPinned = (pins?.length ?? 0) > 0;
+  const isArchived = archives.some((archive) => archive.userId === userId);
 
   // Filter tags to only include those owned by the requesting user
   const filteredTags = tags?.filter((t) => t.userId === userId) || [];
@@ -118,6 +120,7 @@ export function transformNote(
   const transformed: TransformedNote = {
     ...rest,
     isPinned,
+    isArchived,
     tagIds: filteredTags.map((t) => t.id),
     createdAt: toISOString(rest.createdAt),
     updatedAt: toISOString(rest.updatedAt),

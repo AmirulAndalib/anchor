@@ -114,7 +114,7 @@ export default function TrashPage() {
         <div className="mb-6">
           <h1 className="font-serif text-2xl font-bold">Trash</h1>
           <p className="text-sm text-muted-foreground mt-1">
-            Notes in trash will be permanently deleted after 30 days
+            Notes in trash are permanently deleted after 30 days
           </p>
         </div>
 
@@ -281,7 +281,7 @@ function TrashNoteCard({
                   <Trash2 className="h-3.5 w-3.5" />
                 </Button>
               </TooltipTrigger>
-              <TooltipContent side="top">Delete Forever</TooltipContent>
+              <TooltipContent side="top">Delete permanently</TooltipContent>
             </Tooltip>
           </TooltipProvider>
           <RestoreDialog

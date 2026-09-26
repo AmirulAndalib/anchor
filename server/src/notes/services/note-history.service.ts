@@ -21,6 +21,7 @@ import {
   ERROR_MESSAGES,
   NOTE_INCLUDE_TAGS,
   USER_SELECT_FIELDS,
+  noteArchiveInclude,
   notePinInclude,
 } from '../constants/notes.constants';
 
@@ -92,6 +93,11 @@ export class NoteHistoryService {
     );
     await this.noteAccessService.ensureNoteIsActive(noteId);
 
+    const include = {
+      ...NOTE_INCLUDE_TAGS,
+      ...notePinInclude(userId),
+      ...noteArchiveInclude(userId),
+    };
     const note = await this.prisma.$transaction(async (tx) => {
       const revision = await tx.noteRevision.findFirst({
         where: { id: revisionId, noteId },
@@ -106,7 +112,7 @@ export class NoteHistoryService {
       if (!noteContentChanged(prior, restored)) {
         return tx.note.findUniqueOrThrow({
           where: { id: noteId },
-          include: { ...NOTE_INCLUDE_TAGS, ...notePinInclude(userId) },
+          include,
         });
       }
 
@@ -114,7 +120,7 @@ export class NoteHistoryService {
       const updated = await tx.note.update({
         where: { id: noteId },
         data: { ...restored, version: { increment: 1 } },
-        include: { ...NOTE_INCLUDE_TAGS, ...notePinInclude(userId) },
+        include,
       });
 
       const recipients = await this.syncEmitter.noteRecipients(tx, noteId);

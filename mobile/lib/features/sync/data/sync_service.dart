@@ -205,7 +205,9 @@ class SyncService {
       content: note.content,
       isArchived: note.isArchived,
       background: note.background,
-      state: note.state,
+      state: note.permission == 'owner' || note.state == 'deleted'
+          ? note.state
+          : null,
       tagIds: tagIds,
       revisions: revisions,
       isRevisionsOnly: isRevisionsOnly,

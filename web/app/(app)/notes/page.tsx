@@ -222,14 +222,24 @@ export default function NotesPage() {
       .filter((note) => selectedNoteIds.has(note.id))
       .every((note) => note.isPinned);
 
+  const selectedSharedCount = notes.filter(
+    (note) => selectedNoteIds.has(note.id) && note.permission !== "owner",
+  ).length;
+
   // Bulk delete mutation
   const bulkDeleteMutation = useMutation({
-    mutationFn: (noteIds: string[]) => bulkDeleteNotes(noteIds),
-    onSuccess: (_, noteIds) => {
+    mutationFn: ({ noteIds }: { noteIds: string[]; sharedCount: number }) =>
+      bulkDeleteNotes(noteIds),
+    onSuccess: (_, { noteIds, sharedCount }) => {
       queryClient.invalidateQueries({ queryKey: ["notes"] });
       queryClient.invalidateQueries({ queryKey: ["tags"] });
+      const count = `${noteIds.length} note${noteIds.length > 1 ? "s" : ""}`;
       toast.success(
-        `${noteIds.length} note${noteIds.length > 1 ? "s" : ""} moved to trash`,
+        sharedCount === 0
+          ? `${count} moved to trash`
+          : sharedCount === noteIds.length
+            ? `${count} removed`
+            : `${count} deleted`,
       );
       setSelectedNoteIds(new Set());
       setIsSelectionMode(false);
@@ -717,10 +727,13 @@ export default function NotesPage() {
         open={deleteDialogOpen}
         onOpenChange={setDeleteDialogOpen}
         onConfirm={() => {
-          const noteIds = Array.from(selectedNoteIds);
-          bulkDeleteMutation.mutate(noteIds);
+          bulkDeleteMutation.mutate({
+            noteIds: Array.from(selectedNoteIds),
+            sharedCount: selectedSharedCount,
+          });
         }}
         count={selectedNoteIds.size}
+        sharedCount={selectedSharedCount}
         isPending={bulkDeleteMutation.isPending}
       />
 

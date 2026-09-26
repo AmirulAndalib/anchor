@@ -160,6 +160,7 @@ function ArchiveNoteCard({
   const dialogJustClosedRef = React.useRef(false);
 
   const handleDialogClose = (open: boolean) => {
+    setDialogOpen(open);
     if (!open) {
       dialogJustClosedRef.current = true;
       setTimeout(() => {
@@ -187,7 +188,7 @@ function ArchiveNoteCard({
       viewMode="masonry"
       footerLeft={
         <span className="font-medium">
-          Archived {format(new Date(note.updatedAt), "MMM d, yyyy")}
+          Edited {format(new Date(note.updatedAt), "MMM d, yyyy")}
         </span>
       }
       footerRight={

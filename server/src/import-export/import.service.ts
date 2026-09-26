@@ -175,7 +175,6 @@ export class ImportService {
             ...(noteId ? { id: noteId } : {}),
             title: item.title,
             content: prepared.content,
-            isArchived: item.isArchived === true,
             background: prepared.background,
             state: isTrashed ? NoteState.trashed : NoteState.active,
             userId,
@@ -190,6 +189,12 @@ export class ImportService {
 
         if (item.isPinned === true) {
           await tx.notePin.create({
+            data: { userId, noteId: note.id },
+          });
+        }
+
+        if (item.isArchived === true) {
+          await tx.noteArchive.create({
             data: { userId, noteId: note.id },
           });
         }

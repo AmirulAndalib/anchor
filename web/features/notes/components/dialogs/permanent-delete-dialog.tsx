@@ -35,8 +35,7 @@ export function PermanentDeleteDialog({
             Delete permanently?
           </DialogTitle>
           <DialogDescription className="pt-2">
-            This action cannot be undone. This note will be permanently deleted
-            and cannot be recovered.
+            This note will be permanently deleted.
           </DialogDescription>
         </DialogHeader>
         <DialogFooter className="gap-2 sm:gap-0">
@@ -51,7 +50,7 @@ export function PermanentDeleteDialog({
             {isPending ? (
               <Loader2 className="h-4 w-4 animate-spin" />
             ) : (
-              "Delete Forever"
+              "Delete permanently"
             )}
           </Button>
         </DialogFooter>

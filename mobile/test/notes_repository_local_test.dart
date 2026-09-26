@@ -254,9 +254,78 @@ void main() {
 
       expect(notes.map((n) => n.id), ['n-d', 'n-c', 'n-b', 'n-a']);
     });
+
+    test('a shared note archives in place and queues to sync', () async {
+      final edited = DateTime.utc(2026, 7, 1);
+      await insertNote(id: 'n1', permission: 'viewer', updatedAt: edited);
+
+      await repo.bulkArchiveNotes(['n1']);
+
+      final note = (await repo.watchArchivedNotes().first).single;
+      expect(note.id, 'n1');
+      expect(note.updatedAt?.toUtc(), edited);
+      expect(note.isSynced, isFalse);
+    });
+  });
+
+  group('deleting', () {
+    test('trashes your own notes and removes shared ones', () async {
+      await insertNote(id: 'mine');
+      await insertNote(id: 'theirs', permission: 'editor');
+
+      await repo.bulkDeleteNotes(['mine', 'theirs']);
+
+      final rows = await db.select(db.notes).get();
+      expect(
+        {for (final row in rows) row.id: row.state},
+        {'mine': 'trashed', 'theirs': 'deleted'},
+      );
+      expect(rows.every((row) => !row.isSynced), isTrue);
+      expect(await repo.watchTrashedNotes().first, hasLength(1));
+    });
+  });
+
+  group('edit time', () {
+    Future<domain.Note> stored(String id) async => (await repo.getNote(id))!;
+    final edited = DateTime.utc(2026, 7, 1);
+
+    test('a pin or tag change leaves it alone', () async {
+      await insertTag('t1');
+      await insertNote(id: 'n1', updatedAt: edited);
+
+      await repo.updateNote(
+        (await stored('n1')).copyWith(isPinned: true, tagIds: ['t1']),
+      );
+
+      final note = await stored('n1');
+      expect(note.updatedAt?.toUtc(), edited);
+      expect(note.isSynced, isFalse);
+    });
+
+    test('a text change moves it', () async {
+      await insertNote(id: 'n1', updatedAt: edited);
+
+      await repo.updateNote((await stored('n1')).copyWith(content: 'milk'));
+
+      expect((await stored('n1')).updatedAt?.toUtc(), isNot(edited));
+    });
   });
 
   group('tags for note', () {
+    test('setNoteTags queues the tags and leaves the note alone', () async {
+      final edited = DateTime.utc(2026, 7, 1);
+      await insertTag('t1');
+      await insertNote(id: 'n1', permission: 'viewer', updatedAt: edited);
+
+      await repo.setNoteTags('n1', ['t1']);
+
+      final note = (await repo.getNote('n1'))!;
+      expect(note.tagIds, ['t1']);
+      expect(note.isSynced, isFalse);
+      expect(note.updatedAt?.toUtc(), edited);
+      expect(await revisions.watch('n1').first, isEmpty);
+    });
+
     test('setTagsForNote replaces the existing associations', () async {
       await insertTag('t1');
       await insertTag('t2');

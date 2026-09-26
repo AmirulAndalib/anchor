@@ -23,6 +23,7 @@ import {
   DeleteDialog,
   deleteNote,
   draftTitle,
+  draftUpdate,
   flushNoteUpdate,
   getNote,
   isStoredContentEmpty,
@@ -36,7 +37,6 @@ import {
   permanentDeleteNote,
   ReadOnlyBanner,
   RestoreDialog,
-  reminderUpdate,
   restoreNote,
   ShareDialog,
   sameReminder,
@@ -137,6 +137,7 @@ export default function NoteEditorPage() {
   // The queue outlives every render and reaches the current handlers here.
   const live = useRef({
     noteId,
+    isViewer: false,
     onSaved: (_draft: NoteDraft, _note: Note) => {},
     onConflict: (_serverNote: Note, _canRetry: boolean) =>
       "adopt" as ConflictResolution,
@@ -147,11 +148,13 @@ export default function NoteEditorPage() {
   const queueRef = useRef<NoteSaveQueue | null>(null);
   queueRef.current ??= createNoteSaveQueue({
     save: (draft, baseVersion) =>
-      saveNote(live.current.noteId, {
-        ...draft,
-        reminder: reminderUpdate(draft.reminder, serverReminderRef.current),
-        baseVersion,
-      }),
+      saveNote(
+        live.current.noteId,
+        draftUpdate(draft, serverReminderRef.current, {
+          isViewer: live.current.isViewer,
+          baseVersion,
+        }),
+      ),
     onSaved: (draft, note) => live.current.onSaved(draft, note),
     onConflict: (serverNote, _draft, canRetry) =>
       live.current.onConflict(serverNote, canRetry),
@@ -197,6 +200,7 @@ export default function NoteEditorPage() {
 
   // Check if note is read-only (trashed notes or viewers are read-only)
   const isReadOnly = note ? note.state === "trashed" || isViewer : false;
+  const canSaveDraft = note ? note.state !== "trashed" : true;
   const canUpload = isOwner || isEditor;
 
   const draft = useMemo<NoteDraft>(
@@ -259,6 +263,29 @@ export default function NoteEditorPage() {
       setLastSaved(incoming);
       noteVersionRef.current = serverNote.version;
       serverReminderRef.current = incoming.reminder;
+      queue.setBaseVersion(serverNote.version);
+    },
+    [queue],
+  );
+
+  // Viewers can't change the text, so the server's copy always wins.
+  const applyServerText = useCallback(
+    (serverNote: Note) => {
+      const incoming = noteToDraft(serverNote);
+      setTitle(incoming.title);
+      setContent(incoming.content);
+      setBackground(incoming.background);
+      setLastSaved((saved) =>
+        saved
+          ? {
+              ...saved,
+              title: incoming.title,
+              content: incoming.content,
+              background: incoming.background,
+            }
+          : saved,
+      );
+      noteVersionRef.current = serverNote.version;
       queue.setBaseVersion(serverNote.version);
     },
     [queue],
@@ -375,13 +402,24 @@ export default function NoteEditorPage() {
     if (base !== undefined && note.version <= base) return;
 
     if (hasUnsavedChanges) {
+      if (isViewer) {
+        applyServerText(note);
+        return;
+      }
       noteVersionRef.current = note.version;
       queue.setBaseVersion(note.version);
       return;
     }
 
     applyServerNote(note);
-  }, [note, hasUnsavedChanges, applyServerNote, queue]);
+  }, [
+    note,
+    hasUnsavedChanges,
+    isViewer,
+    applyServerNote,
+    applyServerText,
+    queue,
+  ]);
 
   // Keep lightweight metadata in sync with fresh query data.
   useEffect(() => {
@@ -455,13 +493,16 @@ export default function NoteEditorPage() {
     (savedDraft: NoteDraft, savedNote: Note) => {
       setLastSaved(savedDraft);
       noteVersionRef.current = savedNote.version;
+      if (isViewer) {
+        applyServerText(savedNote);
+      }
       serverReminderRef.current = savedNote.reminder ?? null;
       setIsSaveStuck(false);
       toast.dismiss(saveErrorToastId);
       queryClient.invalidateQueries({ queryKey: ["notes"] });
       queryClient.invalidateQueries({ queryKey: ["tags"] });
     },
-    [queryClient],
+    [applyServerText, isViewer, queryClient],
   );
 
   const handleConflict = useCallback(
@@ -490,7 +531,7 @@ export default function NoteEditorPage() {
   );
 
   const save = useCallback(() => {
-    if (isReadOnly || !hasUnsavedChanges) return;
+    if (!canSaveDraft || !hasUnsavedChanges) return;
 
     if (isNew) {
       void createNewNote(capturePendingFocusRestore());
@@ -505,22 +546,23 @@ export default function NoteEditorPage() {
     draft,
     hasUnsavedChanges,
     isNew,
-    isReadOnly,
+    canSaveDraft,
     queue,
   ]);
 
   const flush = useCallback(() => {
-    if (isNew || isReadOnly || !hasUnsavedChanges) return;
+    if (isNew || !canSaveDraft || !hasUnsavedChanges) return;
 
-    flushNoteUpdate(noteId, {
-      ...draft,
-      reminder: reminderUpdate(draft.reminder, serverReminderRef.current),
-    });
-  }, [draft, hasUnsavedChanges, isNew, isReadOnly, noteId]);
+    flushNoteUpdate(
+      noteId,
+      draftUpdate(draft, serverReminderRef.current, { isViewer }),
+    );
+  }, [canSaveDraft, draft, hasUnsavedChanges, isNew, isViewer, noteId]);
 
   useEffect(() => {
     live.current = {
       noteId,
+      isViewer,
       onSaved: handleSaved,
       onConflict: handleConflict,
       save,
@@ -542,12 +584,12 @@ export default function NoteEditorPage() {
   }, [canUpload, createNewNote, isNew, isReadOnly, noteId]);
 
   useEffect(() => {
-    if (!hasUnsavedChanges || isReadOnly) return;
+    if (!hasUnsavedChanges || !canSaveDraft) return;
 
     const timeout = setTimeout(save, autoSaveDelayMs);
 
     return () => clearTimeout(timeout);
-  }, [hasUnsavedChanges, isReadOnly, save]);
+  }, [canSaveDraft, hasUnsavedChanges, save]);
 
   useEffect(() => {
     const save = () => live.current.save();
@@ -661,7 +703,7 @@ export default function NoteEditorPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["notes"] });
       queryClient.invalidateQueries({ queryKey: ["tags"] });
-      toast.success("Note moved to trash");
+      toast.success(isOwner ? "Note moved to trash" : "Note removed");
       router.back();
     },
     onError: () => {
@@ -860,6 +902,7 @@ export default function NoteEditorPage() {
       <DeleteDialog
         open={deleteDialogOpen}
         onOpenChange={setDeleteDialogOpen}
+        isShared={!isOwner}
         onConfirm={() => {
           deleteMutation.mutate();
           setDeleteDialogOpen(false);

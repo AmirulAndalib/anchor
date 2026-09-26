@@ -21,6 +21,15 @@ export const SHARED_WITH_USER_SELECT = {
   profileImage: true,
 } as const;
 
+// Notes the user owns or has an active share on.
+export const noteAccessibleBy = (userId: string) =>
+  ({
+    OR: [
+      { userId },
+      { sharedWith: { some: { sharedWithUserId: userId, isDeleted: false } } },
+    ],
+  }) satisfies Prisma.NoteWhereInput;
+
 // Common Prisma include patterns for notes
 export const NOTE_INCLUDE_TAGS = {
   tags: {
@@ -46,6 +55,15 @@ export const NOTE_INCLUDE_ATTACHMENT_COUNT = {
 export const notePinInclude = (userId: string) =>
   ({
     pins: {
+      where: { userId },
+      select: { userId: true },
+    },
+  }) as const;
+
+// Include the requesting user's archive state.
+export const noteArchiveInclude = (userId: string) =>
+  ({
+    archives: {
       where: { userId },
       select: { userId: true },
     },

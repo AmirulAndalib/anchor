@@ -27,7 +27,6 @@ interface NoteCreateArgs {
     content: string | null;
     background: string | null;
     state: string;
-    isArchived: boolean;
     createdAt?: Date;
     updatedAt?: Date;
     tags?: { connect: { id: string }[] };
@@ -61,6 +60,7 @@ describe('ImportService.importNotes', () => {
         Promise.resolve({ id: data.id ?? 'generated-id' }),
     );
     prisma.notePin.create.mockResolvedValue({});
+    prisma.noteArchive.create.mockResolvedValue({});
     prisma.tag.findMany.mockResolvedValue([]);
     prisma.tag.createMany.mockResolvedValue({ count: 0 });
 
@@ -128,7 +128,9 @@ describe('ImportService.importNotes', () => {
     const data = noteCreateData(prisma);
     expect(data.id).toBe('0b54f5e9-8f51-4be9-a72f-3bd693466b2f');
     expect(data.userId).toBe(USER_ID);
-    expect(data.isArchived).toBe(true);
+    expect(prisma.noteArchive.create).toHaveBeenCalledWith({
+      data: { userId: USER_ID, noteId: '0b54f5e9-8f51-4be9-a72f-3bd693466b2f' },
+    });
     expect(data.background).toBe('color_teal');
     expect(data.state).toBe('active');
     expect(data.createdAt).toEqual(new Date('2025-01-01T10:00:00.000Z'));

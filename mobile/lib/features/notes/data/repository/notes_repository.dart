@@ -393,6 +393,11 @@ class NotesRepository {
       if (prior.title != note.title || prior.content != note.content) {
         await _revisions.record(prior);
       }
+      final noteChanged =
+          prior.title != note.title ||
+          prior.content != note.content ||
+          prior.background != note.background ||
+          prior.state != note.state.name;
 
       await (_db.update(
         _db.notes,
@@ -404,7 +409,9 @@ class NotesRepository {
           isArchived: drift.Value(note.isArchived),
           background: drift.Value(note.background),
           state: drift.Value(note.state.name),
-          updatedAt: drift.Value(DateTime.now().toUtc()),
+          updatedAt: noteChanged
+              ? drift.Value(DateTime.now().toUtc())
+              : const drift.Value.absent(),
           isSynced: const drift.Value(false),
           localRev: drift.Value(prior.localRev + 1),
           isPinSynced: prior.isPinned == note.isPinned
@@ -458,7 +465,7 @@ class NotesRepository {
 
   // Soft delete - moves note to trash
   Future<void> deleteNote(String id) async {
-    await _writeState(ids: [id], state: 'trashed');
+    await _trashOrRemove([id]);
     scheduleAppSync(trigger: 'NotesRepo.deleteNote');
   }
 
@@ -515,7 +522,7 @@ class NotesRepository {
   // Bulk delete notes
   Future<int> bulkDeleteNotes(List<String> ids) async {
     if (ids.isEmpty) return 0;
-    await _writeState(ids: ids, state: 'trashed');
+    await _trashOrRemove(ids);
     scheduleAppSync(trigger: 'NotesRepo.bulkDeleteNotes');
     return ids.length;
   }
@@ -566,17 +573,29 @@ class NotesRepository {
         }
       });
 
-      await (_db.update(_db.notes)..where((tbl) => tbl.id.isIn(ids))).write(
-        NotesCompanion.custom(
-          updatedAt: drift.Variable(DateTime.now().toUtc()),
-          isSynced: const drift.Constant(false),
-          localRev: _nextRev,
-        ),
-      );
+      await _markUnsynced(ids);
     });
 
     scheduleAppSync(trigger: 'NotesRepo.bulkAddTags');
     return ids.length;
+  }
+
+  /// Replaces this user's tags on a note, leaving the note itself alone.
+  Future<void> setNoteTags(String noteId, List<String> tagIds) async {
+    await _db.transaction(() async {
+      await _tagsRepo.setTagsForNote(noteId, tagIds);
+      await _markUnsynced([noteId]);
+    });
+    scheduleAppSync(trigger: 'NotesRepo.setNoteTags');
+  }
+
+  Future<void> _markUnsynced(List<String> ids) async {
+    await (_db.update(_db.notes)..where((tbl) => tbl.id.isIn(ids))).write(
+      NotesCompanion.custom(
+        isSynced: const drift.Constant(false),
+        localRev: _nextRev,
+      ),
+    );
   }
 
   // Marked deleted here; the row goes once the server has been told.
@@ -589,6 +608,19 @@ class NotesRepository {
     )..where((tbl) => tbl.noteId.equals(id))).go();
 
     scheduleAppSync(trigger: 'NotesRepo.permanentDelete');
+  }
+
+  /// Shared notes are marked deleted, which leaves the share.
+  Future<void> _trashOrRemove(List<String> ids) async {
+    final shared =
+        await (_db.select(_db.notes)..where(
+              (tbl) => tbl.id.isIn(ids) & tbl.permission.equals('owner').not(),
+            ))
+            .map((row) => row.id)
+            .get();
+    final owned = ids.where((id) => !shared.contains(id)).toList();
+    if (owned.isNotEmpty) await _writeState(ids: owned, state: 'trashed');
+    if (shared.isNotEmpty) await _writeState(ids: shared, state: 'deleted');
   }
 
   Future<void> _writeState({
@@ -612,7 +644,6 @@ class NotesRepository {
     await (_db.update(_db.notes)..where((tbl) => tbl.id.isIn(ids))).write(
       NotesCompanion.custom(
         isArchived: drift.Constant(isArchived),
-        updatedAt: drift.Variable(DateTime.now().toUtc()),
         isSynced: const drift.Constant(false),
         localRev: _nextRev,
       ),

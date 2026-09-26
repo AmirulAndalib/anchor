@@ -8,6 +8,7 @@ import {
   SyncOp,
 } from 'src/generated/prisma/enums';
 import { NoteAccessService } from '../notes/services/note-access.service';
+import { NoteSharesService } from '../notes/services/note-shares.service';
 import {
   GuardedNoteFields,
   guardedNoteFieldsChanged,
@@ -15,10 +16,12 @@ import {
 } from '../notes/utils/note-versioning.util';
 import { transformNote } from '../notes/utils/note-transformer.util';
 import { ownedTagIds, reconcileUserTags } from '../notes/utils/note-tags.util';
+import { setNoteArchive } from '../notes/utils/note-archive.util';
 import {
   NOTE_INCLUDE_TAGS,
   NOTE_INCLUDE_SHARES,
   NOTE_INCLUDE_ATTACHMENT_COUNT,
+  noteArchiveInclude,
   notePinInclude,
 } from '../notes/constants/notes.constants';
 import {
@@ -36,6 +39,7 @@ import type {
   SyncReminderChangeDto,
   SyncTagChangeDto,
 } from './dto/sync-request.dto';
+import { SyncNoteState } from './dto/sync-request.dto';
 import {
   SyncApplyResult,
   toSyncReminderPayload,
@@ -49,6 +53,7 @@ export class SyncApplyService {
   constructor(
     private prisma: PrismaService,
     private noteAccess: NoteAccessService,
+    private noteShares: NoteSharesService,
     private syncEmitter: SyncEmitterService,
     private noteRevisions: NoteRevisionsService,
   ) {}
@@ -122,20 +127,29 @@ export class SyncApplyService {
       change.id,
       NoteSharePermission.editor,
     );
-    if (!access.hasAccess) {
-      if (access.permission !== NoteSharePermission.viewer) {
-        return { ...base, status: 'denied' };
-      }
-      // Viewers can't write history; ack so the client stops resending.
-      if (change.revisionsOnly) {
-        return this.ackRevisionsOnly(userId, change, { record: false });
-      }
-      // Viewers can't win content writes; preserve what they typed anyway.
-      return this.noteConflict(userId, change, { canWriteHistory: false });
+    const isViewer =
+      !access.hasAccess && access.permission === NoteSharePermission.viewer;
+    if (!access.hasAccess && !isViewer) {
+      return { ...base, status: 'denied' };
     }
 
+    // Viewers can't write history; ack so the client stops resending.
     if (change.revisionsOnly) {
-      return this.ackRevisionsOnly(userId, change, { record: true });
+      return this.ackRevisionsOnly(userId, change, { record: !isViewer });
+    }
+
+    if (leavesShare(access, change)) {
+      await this.noteShares.leaveShare(userId, change.id);
+      return { ...base, status: 'denied' };
+    }
+
+    if (access.state !== NoteState.deleted) {
+      await this.applyPersonal(userId, change);
+    }
+
+    // Viewers can't win content writes; preserve what they typed anyway.
+    if (isViewer) {
+      return this.noteConflict(userId, change, { canWriteHistory: false });
     }
 
     const outcome = await this.prisma.$transaction(async (tx) => {
@@ -156,7 +170,6 @@ export class SyncApplyService {
         background: change.background,
       };
       if (access.isOwner) {
-        noteData.isArchived = change.isArchived;
         noteData.state = change.state;
       }
       const finalState = noteData.state ?? prior.state;
@@ -165,17 +178,21 @@ export class SyncApplyService {
         state: finalState,
       });
 
-      // A writer that slipped in since the read above makes count 0.
-      const updated = await tx.note.updateMany({
-        where: { id: change.id, version: prior.version },
-        data: {
-          ...noteData,
-          ...(guardedChanged ? { version: { increment: 1 } } : {}),
-          ...(finalState !== prior.state ? { stateChangedAt: new Date() } : {}),
-        },
-      });
-      if (updated.count !== 1) {
-        return { kind: 'conflict' as const };
+      if (guardedChanged) {
+        // A writer that slipped in since the read above makes count 0.
+        const updated = await tx.note.updateMany({
+          where: { id: change.id, version: prior.version },
+          data: {
+            ...noteData,
+            version: { increment: 1 },
+            ...(finalState !== prior.state
+              ? { stateChangedAt: new Date() }
+              : {}),
+          },
+        });
+        if (updated.count !== 1) {
+          return { kind: 'conflict' as const };
+        }
       }
 
       if (
@@ -192,8 +209,8 @@ export class SyncApplyService {
           userId,
         );
       }
-      if (change.tagIds !== undefined) {
-        await reconcileUserTags(tx, change.id, userId, change.tagIds);
+      if (!guardedChanged && !change.revisions?.length) {
+        return { kind: 'applied' as const, version: prior.version };
       }
 
       const recipients = await this.syncEmitter.noteRecipients(tx, change.id);
@@ -216,6 +233,28 @@ export class SyncApplyService {
       return this.noteConflict(userId, change, { canWriteHistory: true });
     }
     return { ...base, status: 'applied', version: outcome.version };
+  }
+
+  // Archive and tags are per-user and conflict-free: read access is all it
+  // takes.
+  private async applyPersonal(
+    userId: string,
+    change: SyncNoteChangeDto,
+  ): Promise<void> {
+    await this.prisma.$transaction(async (tx) => {
+      const archived = await setNoteArchive(
+        tx,
+        userId,
+        change.id,
+        change.isArchived,
+      );
+      const tagged =
+        change.tagIds !== undefined &&
+        (await reconcileUserTags(tx, change.id, userId, change.tagIds));
+      if (archived || tagged) {
+        await this.syncEmitter.emit(tx, noteEmissions([userId], change.id));
+      }
+    });
   }
 
   // A push that carries only recorded history: nothing on the note to apply,
@@ -266,7 +305,6 @@ export class SyncApplyService {
           id: change.id,
           title: change.title,
           content: change.content,
-          isArchived: change.isArchived ?? false,
           background: change.background,
           state: (change.state as NoteState | undefined) ?? NoteState.active,
           userId,
@@ -276,6 +314,7 @@ export class SyncApplyService {
         },
         select: { state: true, version: true },
       });
+      await setNoteArchive(tx, userId, change.id, change.isArchived);
 
       if (change.revisions?.length) {
         await this.noteRevisions.recordClient(
@@ -310,6 +349,7 @@ export class SyncApplyService {
         ...NOTE_INCLUDE_SHARES,
         ...NOTE_INCLUDE_ATTACHMENT_COUNT,
         ...notePinInclude(userId),
+        ...noteArchiveInclude(userId),
       },
     });
     if (!note) {
@@ -628,6 +668,22 @@ export class SyncApplyService {
 
 type NoteWithOwnTags = Note & { tags: Array<{ id: string; userId: string }> };
 
+// Phones copy the owner's trash onto their own row, so trashed only counts
+// while the note is active.
+function leavesShare(
+  access: { isOwner: boolean; state?: NoteState },
+  change: SyncNoteChangeDto,
+): boolean {
+  if (access.isOwner || access.state === NoteState.deleted) {
+    return false;
+  }
+  return (
+    change.state === SyncNoteState.deleted ||
+    (change.state === SyncNoteState.trashed &&
+      access.state === NoteState.active)
+  );
+}
+
 // Whether the push would write nothing: every field it carries already holds
 // the value it is asking for.
 function noteAlreadyMatches(
@@ -640,12 +696,7 @@ function noteAlreadyMatches(
     title: change.title,
     content: change.content,
     background: change.background,
-    ...(isOwner
-      ? {
-          isArchived: change.isArchived,
-          state: change.state,
-        }
-      : {}),
+    ...(isOwner ? { state: change.state } : {}),
   };
   if (guardedNoteFieldsChanged(note, guarded)) {
     return false;

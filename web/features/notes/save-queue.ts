@@ -1,5 +1,10 @@
 import { draftTitle } from "./title";
-import type { Note, NoteReminder, NoteReminderInput } from "./types";
+import type {
+  Note,
+  NoteReminder,
+  NoteReminderInput,
+  UpdateNoteDto,
+} from "./types";
 
 export interface NoteDraft {
   title: string;
@@ -87,6 +92,19 @@ export function reminderUpdate(
 ): NoteReminderInput | null | undefined {
   if (sameReminder(draft, server)) return undefined;
   return toReminderInput(draft);
+}
+
+// What a save sends. Viewers send only their own pin, tags and reminder.
+export function draftUpdate(
+  draft: NoteDraft,
+  serverReminder: NoteReminder | null,
+  { isViewer, baseVersion }: { isViewer: boolean; baseVersion?: number },
+): UpdateNoteDto {
+  const reminder = reminderUpdate(draft.reminder, serverReminder);
+  if (isViewer) {
+    return { isPinned: draft.isPinned, tagIds: draft.tagIds, reminder };
+  }
+  return { ...draft, reminder, baseVersion };
 }
 
 // Holds one request open at a time and remembers only the newest draft, so

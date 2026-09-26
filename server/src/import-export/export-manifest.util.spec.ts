@@ -14,12 +14,12 @@ const makeNote = (overrides: Partial<ExportNoteRow> = {}): ExportNoteRow => ({
   title: 'My note',
   content: '{"ops":[{"insert":"hello\\n"}]}',
   state: 'active',
-  isArchived: false,
   background: null,
   createdAt: new Date('2025-01-01T10:00:00.000Z'),
   updatedAt: new Date('2025-02-01T10:00:00.500Z'),
   tags: [],
   pins: [],
+  archives: [],
   attachments: [],
   sharedWith: [],
   ...overrides,
@@ -43,7 +43,7 @@ describe('buildManifestNote', () => {
   it('maps owned note fields and preserves content verbatim', () => {
     const note = makeNote({
       background: 'color_teal',
-      isArchived: true,
+      archives: [{ userId: USER_ID }],
       pins: [{ userId: USER_ID }],
     });
     const entry = buildManifestNote(note, 'owned', USER_ID);
@@ -63,14 +63,16 @@ describe('buildManifestNote', () => {
     expect(entry.sharedBy).toBeUndefined();
   });
 
-  it('marks trashed state and ignores other users pins', () => {
+  it('marks trashed state and ignores other users pins and archive', () => {
     const note = makeNote({
       state: 'trashed',
       pins: [{ userId: OTHER_USER_ID }],
+      archives: [{ userId: OTHER_USER_ID }],
     });
     const entry = buildManifestNote(note, 'owned', USER_ID);
     expect(entry.state).toBe('trashed');
     expect(entry.isPinned).toBe(false);
+    expect(entry.isArchived).toBe(false);
   });
 
   it('only includes the exporting users tags', () => {

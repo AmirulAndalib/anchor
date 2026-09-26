@@ -130,7 +130,7 @@ export function BulkTagDialog({
             <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
               <TagIcon className="h-5 w-5 text-primary" />
             </div>
-            Add Tags
+            Add tags
           </DialogTitle>
           <DialogDescription className="pt-2">
             Add tags to {count} note{count > 1 ? "s" : ""}. Existing tags on

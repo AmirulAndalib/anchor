@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, type Mock, vi } from 'vitest';
 import { NotesService } from './notes.service';
 import { NoteAccessService } from './note-access.service';
 import { NoteAttachmentsService } from './note-attachments.service';
+import { NoteSharesService } from './note-shares.service';
 import { PrismaService } from '../../prisma/prisma.service';
 import {
   createMockSyncEmitter,
@@ -128,7 +129,6 @@ describe('NotesService tag reconciliation (shared notes)', () => {
           id: where.id,
           title: 'Groceries',
           content: null,
-          isArchived: false,
           background: null,
           state: 'active',
           createdAt: new Date(),
@@ -136,11 +136,16 @@ describe('NotesService tag reconciliation (shared notes)', () => {
           userId: OWNER,
           tags: attachedTagsFor(where.id),
           pins: [],
+          archives: [],
         }),
       ),
     },
     tag: { findMany: vi.fn(tagFindMany) },
     notePin: { upsert: vi.fn(), deleteMany: vi.fn() },
+    noteArchive: {
+      createMany: vi.fn().mockResolvedValue({ count: 1 }),
+      deleteMany: vi.fn().mockResolvedValue({ count: 1 }),
+    },
     noteReminder: {
       findUnique: reminderFindUnique,
       upsert: reminderUpsert,
@@ -149,9 +154,11 @@ describe('NotesService tag reconciliation (shared notes)', () => {
     },
   } as unknown as PrismaService;
 
-  const noteAccess = {
-    ensureNoteAccess: vi.fn().mockResolvedValue(undefined),
-  } as unknown as NoteAccessService;
+  const ensureNoteAccess = vi.fn().mockResolvedValue(undefined);
+  const noteAccess = { ensureNoteAccess } as unknown as NoteAccessService;
+  const noteShares = {
+    leaveShare: vi.fn(),
+  } as unknown as NoteSharesService;
 
   beforeEach(() => {
     tags = [
@@ -167,6 +174,7 @@ describe('NotesService tag reconciliation (shared notes)', () => {
       prisma,
       noteAccess,
       {} as unknown as NoteAttachmentsService,
+      noteShares,
       asSyncEmitter(createMockSyncEmitter()),
       asNoteRevisions(createMockNoteRevisions()),
     );
@@ -245,6 +253,7 @@ describe('NotesService tag reconciliation (shared notes)', () => {
       prisma,
       noteAccess,
       {} as unknown as NoteAttachmentsService,
+      noteShares,
       asSyncEmitter(emitter),
       asNoteRevisions(createMockNoteRevisions()),
     );
@@ -263,6 +272,7 @@ describe('NotesService tag reconciliation (shared notes)', () => {
       prisma,
       noteAccess,
       {} as unknown as NoteAttachmentsService,
+      noteShares,
       asSyncEmitter(emitter),
       asNoteRevisions(createMockNoteRevisions()),
     );
@@ -271,6 +281,69 @@ describe('NotesService tag reconciliation (shared notes)', () => {
 
     expect(reminderDelete).not.toHaveBeenCalled();
     expect(emittedTypes(emitter)).not.toContain('reminder');
+  });
+
+  it('an archive-only save needs read access and leaves the note alone', async () => {
+    const emitter = createMockSyncEmitter();
+    service = new NotesService(
+      prisma,
+      noteAccess,
+      {} as unknown as NoteAttachmentsService,
+      noteShares,
+      asSyncEmitter(emitter),
+      asNoteRevisions(createMockNoteRevisions()),
+    );
+
+    await service.update(EDITOR, NOTE_ID, { isArchived: true });
+
+    expect(ensureNoteAccess).toHaveBeenCalledWith(EDITOR, NOTE_ID, undefined);
+    expect(noteUpdateMock).not.toHaveBeenCalled();
+    expect(emitter.emit).toHaveBeenCalledWith(prisma, [
+      {
+        recipientUserId: EDITOR,
+        entityType: 'note',
+        entityId: NOTE_ID,
+        op: 'upsert',
+      },
+    ]);
+  });
+
+  it('a tags-only save needs read access and reaches only the tagger', async () => {
+    const emitter = createMockSyncEmitter();
+    emitter.noteRecipients.mockResolvedValue([OWNER, EDITOR]);
+    service = new NotesService(
+      prisma,
+      noteAccess,
+      {} as unknown as NoteAttachmentsService,
+      noteShares,
+      asSyncEmitter(emitter),
+      asNoteRevisions(createMockNoteRevisions()),
+    );
+
+    await service.update(EDITOR, NOTE_ID, { tagIds: [] });
+
+    expect(ensureNoteAccess).toHaveBeenCalledWith(EDITOR, NOTE_ID, undefined);
+    expect(noteTags.has(pair(NOTE_ID, 'tag-family'))).toBe(false);
+    expect(emitter.emit).toHaveBeenCalledWith(prisma, [
+      {
+        recipientUserId: EDITOR,
+        entityType: 'note',
+        entityId: NOTE_ID,
+        op: 'upsert',
+      },
+    ]);
+  });
+
+  it('a save that edits the note still needs editor permission', async () => {
+    await service.update(EDITOR, NOTE_ID, {
+      title: 'Groceries',
+      isArchived: true,
+    });
+
+    expect(ensureNoteAccess).toHaveBeenCalledWith(EDITOR, NOTE_ID, 'editor');
+    for (const [arg] of noteUpdateMock.mock.calls) {
+      expect(arg.data).not.toHaveProperty('isArchived');
+    }
   });
 });
 

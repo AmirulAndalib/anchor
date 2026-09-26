@@ -16,7 +16,7 @@ class ArchiveScreen extends ConsumerWidget {
       builder: (ctx) => ConfirmDialog(
         icon: LucideIcons.archiveRestore,
         iconColor: Theme.of(context).colorScheme.primary,
-        title: 'Unarchive Note',
+        title: 'Unarchive note?',
         message: 'This note will be moved back to your notes.',
         cancelText: 'Cancel',
         confirmText: 'Unarchive',
@@ -48,7 +48,7 @@ class ArchiveScreen extends ConsumerWidget {
       notes: ref.watch(archiveControllerProvider),
       emptyIcon: LucideIcons.archive,
       emptyMessage: 'Archive is empty',
-      datePrefix: 'Archived',
+      datePrefix: 'Edited',
       trailingActions: (note) => [
         IconButton(
           icon: const Icon(LucideIcons.archiveRestore),

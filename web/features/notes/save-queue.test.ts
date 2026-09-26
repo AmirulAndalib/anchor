@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import {
   createNoteSaveQueue,
+  draftUpdate,
   type NoteDraft,
   type NoteSaveQueueHandlers,
   noteDraftsEqual,
@@ -163,6 +164,41 @@ describe("reminderUpdate", () => {
 
   it("sends null for the reminder the user removed here", () => {
     expect(reminderUpdate(null, reminder)).toBeNull();
+  });
+});
+
+describe("draftUpdate", () => {
+  const draft: NoteDraft = {
+    title: "Groceries",
+    content: "milk",
+    isPinned: true,
+    background: "color_teal",
+    tagIds: ["t1"],
+    reminder: { remindAt: "2026-09-04T09:00", recurrence: "none", version: 1 },
+  };
+
+  it("sends the whole draft for someone who can edit", () => {
+    expect(
+      draftUpdate(draft, null, { isViewer: false, baseVersion: 3 }),
+    ).toEqual({
+      title: "Groceries",
+      content: "milk",
+      isPinned: true,
+      background: "color_teal",
+      tagIds: ["t1"],
+      reminder: { remindAt: "2026-09-04T09:00", recurrence: "none" },
+      baseVersion: 3,
+    });
+  });
+
+  it("sends only a viewer's own pin, tags and reminder", () => {
+    expect(
+      draftUpdate(draft, null, { isViewer: true, baseVersion: 3 }),
+    ).toEqual({
+      isPinned: true,
+      tagIds: ["t1"],
+      reminder: { remindAt: "2026-09-04T09:00", recurrence: "none" },
+    });
   });
 });
 

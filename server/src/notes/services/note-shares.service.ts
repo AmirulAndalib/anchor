@@ -16,6 +16,8 @@ import {
   SHARED_WITH_USER_SELECT,
   ERROR_MESSAGES,
 } from '../constants/notes.constants';
+import { reconcileUserTags } from '../utils/note-tags.util';
+import type { Prisma } from 'src/generated/prisma/client';
 
 @Injectable()
 export class NoteSharesService {
@@ -184,32 +186,50 @@ export class NoteSharesService {
       throw new NotFoundException(ERROR_MESSAGES.SHARE_NOT_FOUND);
     }
 
-    await this.prisma.$transaction(async (tx) => {
-      await tx.noteShare.update({
-        where: { id: shareId },
-        data: { isDeleted: true },
-      });
-
-      await tx.notePin.deleteMany({
-        where: { noteId, userId: share.sharedWithUserId },
-      });
-
-      // Their reminder goes too, or it comes back on a re-share.
-      await tx.noteReminder.deleteMany({
-        where: { noteId, userId: share.sharedWithUserId },
-      });
-
-      // The revoked sharee gets a note remove; the rest re-pull so their share
-      // lists stay fresh.
-      const remaining = await this.syncEmitter.noteRecipients(tx, noteId);
-      await this.syncEmitter.removeNote(
-        tx,
-        [share.sharedWithUserId],
-        noteId,
-        noteEmissions(remaining, noteId),
-      );
-    });
+    await this.prisma.$transaction((tx) => this.endShare(tx, share));
 
     return { success: true };
+  }
+
+  async leaveShare(userId: string, noteId: string): Promise<void> {
+    const share = await this.prisma.noteShare.findUnique({
+      where: {
+        noteId_sharedWithUserId: { noteId, sharedWithUserId: userId },
+      },
+    });
+    if (!share || share.isDeleted) {
+      return;
+    }
+
+    await this.prisma.$transaction((tx) => this.endShare(tx, share));
+  }
+
+  private async endShare(
+    tx: Prisma.TransactionClient,
+    share: { id: string; noteId: string; sharedWithUserId: string },
+  ) {
+    const { noteId, sharedWithUserId: userId } = share;
+
+    await tx.noteShare.update({
+      where: { id: share.id },
+      data: { isDeleted: true },
+    });
+
+    // Their own pin, archive, reminder and tags go too, or they come back on
+    // a re-share.
+    await tx.notePin.deleteMany({ where: { noteId, userId } });
+    await tx.noteArchive.deleteMany({ where: { noteId, userId } });
+    await tx.noteReminder.deleteMany({ where: { noteId, userId } });
+    await reconcileUserTags(tx, noteId, userId, []);
+
+    // The sharee gets a note remove; the rest re-pull so their share lists
+    // stay fresh.
+    const remaining = await this.syncEmitter.noteRecipients(tx, noteId);
+    await this.syncEmitter.removeNote(
+      tx,
+      [userId],
+      noteId,
+      noteEmissions(remaining, noteId),
+    );
   }
 }

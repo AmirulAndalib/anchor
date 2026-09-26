@@ -18,13 +18,13 @@ export async function ownedTagIds(
 }
 
 // Sync the caller's own tags on a note to `desiredTagIds`, leaving other
-// users' tags untouched.
+// users' tags untouched. Returns whether anything changed.
 export async function reconcileUserTags(
   tx: Prisma.TransactionClient,
   noteId: string,
   userId: string,
   desiredTagIds: string[],
-): Promise<void> {
+): Promise<boolean> {
   const desired = new Set(await ownedTagIds(tx, userId, desiredTagIds));
 
   const attached = await tx.tag.findMany({
@@ -37,7 +37,7 @@ export async function reconcileUserTags(
   const toDisconnect = [...current].filter((id) => !desired.has(id));
 
   if (toConnect.length === 0 && toDisconnect.length === 0) {
-    return;
+    return false;
   }
 
   await tx.note.update({
@@ -49,4 +49,5 @@ export async function reconcileUserTags(
       },
     },
   });
+  return true;
 }

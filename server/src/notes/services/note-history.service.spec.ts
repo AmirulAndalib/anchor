@@ -34,6 +34,7 @@ describe('NoteHistoryService', () => {
     version: number;
     createdAt: Date;
     updatedAt: Date;
+    archives: { userId: string }[];
   };
   let access: { hasAccess: boolean; isOwner: boolean; state?: NoteState };
   let service: NoteHistoryService;
@@ -121,6 +122,7 @@ describe('NoteHistoryService', () => {
       version: 4,
       createdAt: new Date('2026-08-01T00:00:00.000Z'),
       updatedAt: new Date('2026-08-02T00:00:00.000Z'),
+      archives: [],
     };
     access = { hasAccess: true, isOwner: true, state: NoteState.active };
     emitter = createMockSyncEmitter();

@@ -54,12 +54,12 @@ export interface ExportNoteRow {
   title: string;
   content: string | null;
   state: string;
-  isArchived: boolean;
   background: string | null;
   createdAt: Date;
   updatedAt: Date;
   tags: { id: string; userId: string }[];
   pins: { userId: string }[];
+  archives: { userId: string }[];
   reminders?: { userId: string; remindAt: string; recurrence: string }[];
   attachments: {
     id: string;
@@ -96,7 +96,7 @@ export function buildManifestNote(
     title: note.title,
     content: note.content,
     state: note.state === 'trashed' ? 'trashed' : 'active',
-    isArchived: note.isArchived,
+    isArchived: note.archives.some((archive) => archive.userId === userId),
     isPinned: note.pins.some((pin) => pin.userId === userId),
     background: note.background,
     // Only the exporting user's tags are meaningful in their backup

@@ -43,7 +43,7 @@ export class TagsService {
               notes: {
                 where: {
                   state: 'active',
-                  isArchived: false,
+                  archives: { none: { userId } },
                 },
               },
             },
@@ -68,7 +68,7 @@ export class TagsService {
             notes: {
               where: {
                 state: 'active',
-                isArchived: false,
+                archives: { none: { userId } },
               },
             },
           },
@@ -86,7 +86,7 @@ export class TagsService {
             notes: {
               where: {
                 state: 'active',
-                isArchived: false,
+                archives: { none: { userId } },
               },
             },
           },
@@ -143,7 +143,7 @@ export class TagsService {
               notes: {
                 where: {
                   state: 'active',
-                  isArchived: false,
+                  archives: { none: { userId } },
                 },
               },
             },

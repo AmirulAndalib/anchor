@@ -224,6 +224,24 @@ void main() {
     expect(saved.title, ' Shopping list ');
   });
 
+  testWidgets('a title edit keeps the stored text exactly as it was', (
+    tester,
+  ) async {
+    // Formatted differently from what the editor writes.
+    const content = '{"ops": [{"insert": "milk"}, {"insert": ", eggs\\n"}]}';
+    const note = Note(id: 'n1', title: 'Shopping', content: content);
+    await pumpScreen(tester, note: note);
+
+    await tester.enterText(titleField, 'Weekly shop');
+    await tester.pump();
+    await tester.pump(const Duration(seconds: 3));
+
+    final saved =
+        verify(() => notesRepo.updateNote(captureAny())).captured.last as Note;
+    expect(saved.title, 'Weekly shop');
+    expect(saved.content, content);
+  });
+
   testWidgets('saves a title of only spaces as no title', (tester) async {
     const note = Note(
       id: 'n1',

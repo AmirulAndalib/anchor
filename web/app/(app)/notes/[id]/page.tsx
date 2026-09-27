@@ -7,7 +7,6 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { useAuth } from "@/features/auth";
 import type {
-  ConflictResolution,
   CreateNoteDto,
   Note,
   NoteDraft,
@@ -25,6 +24,7 @@ import {
   draftTitle,
   draftUpdate,
   flushNoteUpdate,
+  flushUpdate,
   getNote,
   isStoredContentEmpty,
   NoteBackground,
@@ -37,6 +37,8 @@ import {
   permanentDeleteNote,
   ReadOnlyBanner,
   RestoreDialog,
+  rebaseDraft,
+  replacesText,
   restoreNote,
   ShareDialog,
   sameReminder,
@@ -139,8 +141,8 @@ export default function NoteEditorPage() {
     noteId,
     isViewer: false,
     onSaved: (_draft: NoteDraft, _note: Note) => {},
-    onConflict: (_serverNote: Note, _canRetry: boolean) =>
-      "adopt" as ConflictResolution,
+    onConflict: (_serverNote: Note, _canRetry: boolean): NoteDraft | null =>
+      null,
     save: () => {},
     flush: () => {},
   });
@@ -291,6 +293,29 @@ export default function NoteEditorPage() {
     [queue],
   );
 
+  // Moves what is on screen onto a newer server copy, keeping unsaved edits.
+  const rebaseOnto = useCallback(
+    (serverNote: Note) => {
+      const incoming = noteToDraft(serverNote);
+      const base = lastSaved ?? incoming;
+      const merge =
+        <K extends keyof NoteDraft>(field: K) =>
+        (current: NoteDraft[K]) =>
+          rebaseDraft({ ...base, [field]: current }, base, incoming)[field];
+
+      setTitle((current) => merge("title")(draftTitle(current)));
+      setContent(merge("content"));
+      setIsPinned(merge("isPinned"));
+      setBackground(merge("background"));
+      setSelectedTagIds(merge("tagIds"));
+      setReminder(merge("reminder"));
+      setLastSaved(incoming);
+      noteVersionRef.current = serverNote.version;
+      serverReminderRef.current = incoming.reminder;
+    },
+    [lastSaved],
+  );
+
   // Initialize brand-new note state once per /new session.
   useEffect(() => {
     if (!isNew) {
@@ -394,7 +419,7 @@ export default function NoteEditorPage() {
   }, [note, reminder]);
 
   // A newer copy arrived from somewhere else: it replaces what is on screen,
-  // unless there is an unsaved edit, which is re-based onto it and goes up next.
+  // apart from any unsaved edit, which stays and goes up next.
   useEffect(() => {
     if (!note || hydratedNoteIdRef.current !== note.id) return;
 
@@ -402,24 +427,13 @@ export default function NoteEditorPage() {
     if (base !== undefined && note.version <= base) return;
 
     if (hasUnsavedChanges) {
-      if (isViewer) {
-        applyServerText(note);
-        return;
-      }
-      noteVersionRef.current = note.version;
+      rebaseOnto(note);
       queue.setBaseVersion(note.version);
       return;
     }
 
     applyServerNote(note);
-  }, [
-    note,
-    hasUnsavedChanges,
-    isViewer,
-    applyServerNote,
-    applyServerText,
-    queue,
-  ]);
+  }, [note, hasUnsavedChanges, applyServerNote, rebaseOnto, queue]);
 
   // Keep lightweight metadata in sync with fresh query data.
   useEffect(() => {
@@ -506,7 +520,7 @@ export default function NoteEditorPage() {
   );
 
   const handleConflict = useCallback(
-    (serverNote: Note, canRetry: boolean): ConflictResolution => {
+    (serverNote: Note, canRetry: boolean): NoteDraft | null => {
       const serverWins =
         !canRetry ||
         serverNote.permission === "viewer" ||
@@ -517,17 +531,24 @@ export default function NoteEditorPage() {
         toast.info("This note was changed elsewhere, so it has been reloaded", {
           id: conflictToastId,
         });
-        return "adopt";
+        return null;
       }
 
-      noteVersionRef.current = serverNote.version;
-      toast.info(
-        "This note was changed elsewhere. Your version is kept and the other one is in its history.",
-        { id: conflictToastId },
-      );
-      return "retry";
+      const isNewer = serverNote.version > (noteVersionRef.current ?? 0);
+      const incoming =
+        isNewer || !lastSaved ? noteToDraft(serverNote) : lastSaved;
+      const base = lastSaved ?? incoming;
+      const next = rebaseDraft(draft, base, incoming);
+      if (isNewer) rebaseOnto(serverNote);
+      if (replacesText(next, base, incoming)) {
+        toast.info(
+          "This note was changed elsewhere. Your version is kept and the other one is in its history.",
+          { id: conflictToastId },
+        );
+      }
+      return noteDraftsEqual(next, incoming) ? null : next;
     },
-    [applyServerNote],
+    [applyServerNote, draft, lastSaved, rebaseOnto],
   );
 
   const save = useCallback(() => {
@@ -551,13 +572,21 @@ export default function NoteEditorPage() {
   ]);
 
   const flush = useCallback(() => {
-    if (isNew || !canSaveDraft || !hasUnsavedChanges) return;
+    if (isNew || !canSaveDraft || !hasUnsavedChanges || !lastSaved) return;
 
     flushNoteUpdate(
       noteId,
-      draftUpdate(draft, serverReminderRef.current, { isViewer }),
+      flushUpdate(draft, lastSaved, serverReminderRef.current, { isViewer }),
     );
-  }, [canSaveDraft, draft, hasUnsavedChanges, isNew, isViewer, noteId]);
+  }, [
+    canSaveDraft,
+    draft,
+    hasUnsavedChanges,
+    isNew,
+    isViewer,
+    lastSaved,
+    noteId,
+  ]);
 
   useEffect(() => {
     live.current = {

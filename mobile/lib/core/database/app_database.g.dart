@@ -152,6 +152,50 @@ class $NotesTable extends Notes with TableInfo<$NotesTable, Note> {
     ),
     defaultValue: const Constant(true),
   );
+  static const VerificationMeta _syncedTitleMeta = const VerificationMeta(
+    'syncedTitle',
+  );
+  @override
+  late final GeneratedColumn<String> syncedTitle = GeneratedColumn<String>(
+    'synced_title',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _syncedContentMeta = const VerificationMeta(
+    'syncedContent',
+  );
+  @override
+  late final GeneratedColumn<String> syncedContent = GeneratedColumn<String>(
+    'synced_content',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _syncedBackgroundMeta = const VerificationMeta(
+    'syncedBackground',
+  );
+  @override
+  late final GeneratedColumn<String> syncedBackground = GeneratedColumn<String>(
+    'synced_background',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _syncedStateMeta = const VerificationMeta(
+    'syncedState',
+  );
+  @override
+  late final GeneratedColumn<String> syncedState = GeneratedColumn<String>(
+    'synced_state',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
   static const VerificationMeta _reminderAtMeta = const VerificationMeta(
     'reminderAt',
   );
@@ -292,6 +336,10 @@ class $NotesTable extends Notes with TableInfo<$NotesTable, Note> {
     version,
     localRev,
     isPinSynced,
+    syncedTitle,
+    syncedContent,
+    syncedBackground,
+    syncedState,
     reminderAt,
     reminderRecurrence,
     reminderVersion,
@@ -389,6 +437,42 @@ class $NotesTable extends Notes with TableInfo<$NotesTable, Note> {
         isPinSynced.isAcceptableOrUnknown(
           data['is_pin_synced']!,
           _isPinSyncedMeta,
+        ),
+      );
+    }
+    if (data.containsKey('synced_title')) {
+      context.handle(
+        _syncedTitleMeta,
+        syncedTitle.isAcceptableOrUnknown(
+          data['synced_title']!,
+          _syncedTitleMeta,
+        ),
+      );
+    }
+    if (data.containsKey('synced_content')) {
+      context.handle(
+        _syncedContentMeta,
+        syncedContent.isAcceptableOrUnknown(
+          data['synced_content']!,
+          _syncedContentMeta,
+        ),
+      );
+    }
+    if (data.containsKey('synced_background')) {
+      context.handle(
+        _syncedBackgroundMeta,
+        syncedBackground.isAcceptableOrUnknown(
+          data['synced_background']!,
+          _syncedBackgroundMeta,
+        ),
+      );
+    }
+    if (data.containsKey('synced_state')) {
+      context.handle(
+        _syncedStateMeta,
+        syncedState.isAcceptableOrUnknown(
+          data['synced_state']!,
+          _syncedStateMeta,
         ),
       );
     }
@@ -539,6 +623,22 @@ class $NotesTable extends Notes with TableInfo<$NotesTable, Note> {
         DriftSqlType.bool,
         data['${effectivePrefix}is_pin_synced'],
       )!,
+      syncedTitle: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}synced_title'],
+      ),
+      syncedContent: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}synced_content'],
+      ),
+      syncedBackground: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}synced_background'],
+      ),
+      syncedState: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}synced_state'],
+      ),
       reminderAt: attachedDatabase.typeMapping.read(
         DriftSqlType.string,
         data['${effectivePrefix}reminder_at'],
@@ -605,6 +705,10 @@ class Note extends DataClass implements Insertable<Note> {
   final int? version;
   final int localRev;
   final bool isPinSynced;
+  final String? syncedTitle;
+  final String? syncedContent;
+  final String? syncedBackground;
+  final String? syncedState;
   final String? reminderAt;
   final String? reminderRecurrence;
   final int? reminderVersion;
@@ -629,6 +733,10 @@ class Note extends DataClass implements Insertable<Note> {
     this.version,
     required this.localRev,
     required this.isPinSynced,
+    this.syncedTitle,
+    this.syncedContent,
+    this.syncedBackground,
+    this.syncedState,
     this.reminderAt,
     this.reminderRecurrence,
     this.reminderVersion,
@@ -664,6 +772,18 @@ class Note extends DataClass implements Insertable<Note> {
     }
     map['local_rev'] = Variable<int>(localRev);
     map['is_pin_synced'] = Variable<bool>(isPinSynced);
+    if (!nullToAbsent || syncedTitle != null) {
+      map['synced_title'] = Variable<String>(syncedTitle);
+    }
+    if (!nullToAbsent || syncedContent != null) {
+      map['synced_content'] = Variable<String>(syncedContent);
+    }
+    if (!nullToAbsent || syncedBackground != null) {
+      map['synced_background'] = Variable<String>(syncedBackground);
+    }
+    if (!nullToAbsent || syncedState != null) {
+      map['synced_state'] = Variable<String>(syncedState);
+    }
     if (!nullToAbsent || reminderAt != null) {
       map['reminder_at'] = Variable<String>(reminderAt);
     }
@@ -718,6 +838,18 @@ class Note extends DataClass implements Insertable<Note> {
           : Value(version),
       localRev: Value(localRev),
       isPinSynced: Value(isPinSynced),
+      syncedTitle: syncedTitle == null && nullToAbsent
+          ? const Value.absent()
+          : Value(syncedTitle),
+      syncedContent: syncedContent == null && nullToAbsent
+          ? const Value.absent()
+          : Value(syncedContent),
+      syncedBackground: syncedBackground == null && nullToAbsent
+          ? const Value.absent()
+          : Value(syncedBackground),
+      syncedState: syncedState == null && nullToAbsent
+          ? const Value.absent()
+          : Value(syncedState),
       reminderAt: reminderAt == null && nullToAbsent
           ? const Value.absent()
           : Value(reminderAt),
@@ -768,6 +900,10 @@ class Note extends DataClass implements Insertable<Note> {
       version: serializer.fromJson<int?>(json['version']),
       localRev: serializer.fromJson<int>(json['localRev']),
       isPinSynced: serializer.fromJson<bool>(json['isPinSynced']),
+      syncedTitle: serializer.fromJson<String?>(json['syncedTitle']),
+      syncedContent: serializer.fromJson<String?>(json['syncedContent']),
+      syncedBackground: serializer.fromJson<String?>(json['syncedBackground']),
+      syncedState: serializer.fromJson<String?>(json['syncedState']),
       reminderAt: serializer.fromJson<String?>(json['reminderAt']),
       reminderRecurrence: serializer.fromJson<String?>(
         json['reminderRecurrence'],
@@ -801,6 +937,10 @@ class Note extends DataClass implements Insertable<Note> {
       'version': serializer.toJson<int?>(version),
       'localRev': serializer.toJson<int>(localRev),
       'isPinSynced': serializer.toJson<bool>(isPinSynced),
+      'syncedTitle': serializer.toJson<String?>(syncedTitle),
+      'syncedContent': serializer.toJson<String?>(syncedContent),
+      'syncedBackground': serializer.toJson<String?>(syncedBackground),
+      'syncedState': serializer.toJson<String?>(syncedState),
       'reminderAt': serializer.toJson<String?>(reminderAt),
       'reminderRecurrence': serializer.toJson<String?>(reminderRecurrence),
       'reminderVersion': serializer.toJson<int?>(reminderVersion),
@@ -828,6 +968,10 @@ class Note extends DataClass implements Insertable<Note> {
     Value<int?> version = const Value.absent(),
     int? localRev,
     bool? isPinSynced,
+    Value<String?> syncedTitle = const Value.absent(),
+    Value<String?> syncedContent = const Value.absent(),
+    Value<String?> syncedBackground = const Value.absent(),
+    Value<String?> syncedState = const Value.absent(),
     Value<String?> reminderAt = const Value.absent(),
     Value<String?> reminderRecurrence = const Value.absent(),
     Value<int?> reminderVersion = const Value.absent(),
@@ -852,6 +996,14 @@ class Note extends DataClass implements Insertable<Note> {
     version: version.present ? version.value : this.version,
     localRev: localRev ?? this.localRev,
     isPinSynced: isPinSynced ?? this.isPinSynced,
+    syncedTitle: syncedTitle.present ? syncedTitle.value : this.syncedTitle,
+    syncedContent: syncedContent.present
+        ? syncedContent.value
+        : this.syncedContent,
+    syncedBackground: syncedBackground.present
+        ? syncedBackground.value
+        : this.syncedBackground,
+    syncedState: syncedState.present ? syncedState.value : this.syncedState,
     reminderAt: reminderAt.present ? reminderAt.value : this.reminderAt,
     reminderRecurrence: reminderRecurrence.present
         ? reminderRecurrence.value
@@ -892,6 +1044,18 @@ class Note extends DataClass implements Insertable<Note> {
       isPinSynced: data.isPinSynced.present
           ? data.isPinSynced.value
           : this.isPinSynced,
+      syncedTitle: data.syncedTitle.present
+          ? data.syncedTitle.value
+          : this.syncedTitle,
+      syncedContent: data.syncedContent.present
+          ? data.syncedContent.value
+          : this.syncedContent,
+      syncedBackground: data.syncedBackground.present
+          ? data.syncedBackground.value
+          : this.syncedBackground,
+      syncedState: data.syncedState.present
+          ? data.syncedState.value
+          : this.syncedState,
       reminderAt: data.reminderAt.present
           ? data.reminderAt.value
           : this.reminderAt,
@@ -941,6 +1105,10 @@ class Note extends DataClass implements Insertable<Note> {
           ..write('version: $version, ')
           ..write('localRev: $localRev, ')
           ..write('isPinSynced: $isPinSynced, ')
+          ..write('syncedTitle: $syncedTitle, ')
+          ..write('syncedContent: $syncedContent, ')
+          ..write('syncedBackground: $syncedBackground, ')
+          ..write('syncedState: $syncedState, ')
           ..write('reminderAt: $reminderAt, ')
           ..write('reminderRecurrence: $reminderRecurrence, ')
           ..write('reminderVersion: $reminderVersion, ')
@@ -970,6 +1138,10 @@ class Note extends DataClass implements Insertable<Note> {
     version,
     localRev,
     isPinSynced,
+    syncedTitle,
+    syncedContent,
+    syncedBackground,
+    syncedState,
     reminderAt,
     reminderRecurrence,
     reminderVersion,
@@ -998,6 +1170,10 @@ class Note extends DataClass implements Insertable<Note> {
           other.version == this.version &&
           other.localRev == this.localRev &&
           other.isPinSynced == this.isPinSynced &&
+          other.syncedTitle == this.syncedTitle &&
+          other.syncedContent == this.syncedContent &&
+          other.syncedBackground == this.syncedBackground &&
+          other.syncedState == this.syncedState &&
           other.reminderAt == this.reminderAt &&
           other.reminderRecurrence == this.reminderRecurrence &&
           other.reminderVersion == this.reminderVersion &&
@@ -1024,6 +1200,10 @@ class NotesCompanion extends UpdateCompanion<Note> {
   final Value<int?> version;
   final Value<int> localRev;
   final Value<bool> isPinSynced;
+  final Value<String?> syncedTitle;
+  final Value<String?> syncedContent;
+  final Value<String?> syncedBackground;
+  final Value<String?> syncedState;
   final Value<String?> reminderAt;
   final Value<String?> reminderRecurrence;
   final Value<int?> reminderVersion;
@@ -1049,6 +1229,10 @@ class NotesCompanion extends UpdateCompanion<Note> {
     this.version = const Value.absent(),
     this.localRev = const Value.absent(),
     this.isPinSynced = const Value.absent(),
+    this.syncedTitle = const Value.absent(),
+    this.syncedContent = const Value.absent(),
+    this.syncedBackground = const Value.absent(),
+    this.syncedState = const Value.absent(),
     this.reminderAt = const Value.absent(),
     this.reminderRecurrence = const Value.absent(),
     this.reminderVersion = const Value.absent(),
@@ -1075,6 +1259,10 @@ class NotesCompanion extends UpdateCompanion<Note> {
     this.version = const Value.absent(),
     this.localRev = const Value.absent(),
     this.isPinSynced = const Value.absent(),
+    this.syncedTitle = const Value.absent(),
+    this.syncedContent = const Value.absent(),
+    this.syncedBackground = const Value.absent(),
+    this.syncedState = const Value.absent(),
     this.reminderAt = const Value.absent(),
     this.reminderRecurrence = const Value.absent(),
     this.reminderVersion = const Value.absent(),
@@ -1102,6 +1290,10 @@ class NotesCompanion extends UpdateCompanion<Note> {
     Expression<int>? version,
     Expression<int>? localRev,
     Expression<bool>? isPinSynced,
+    Expression<String>? syncedTitle,
+    Expression<String>? syncedContent,
+    Expression<String>? syncedBackground,
+    Expression<String>? syncedState,
     Expression<String>? reminderAt,
     Expression<String>? reminderRecurrence,
     Expression<int>? reminderVersion,
@@ -1128,6 +1320,10 @@ class NotesCompanion extends UpdateCompanion<Note> {
       if (version != null) 'version': version,
       if (localRev != null) 'local_rev': localRev,
       if (isPinSynced != null) 'is_pin_synced': isPinSynced,
+      if (syncedTitle != null) 'synced_title': syncedTitle,
+      if (syncedContent != null) 'synced_content': syncedContent,
+      if (syncedBackground != null) 'synced_background': syncedBackground,
+      if (syncedState != null) 'synced_state': syncedState,
       if (reminderAt != null) 'reminder_at': reminderAt,
       if (reminderRecurrence != null) 'reminder_recurrence': reminderRecurrence,
       if (reminderVersion != null) 'reminder_version': reminderVersion,
@@ -1157,6 +1353,10 @@ class NotesCompanion extends UpdateCompanion<Note> {
     Value<int?>? version,
     Value<int>? localRev,
     Value<bool>? isPinSynced,
+    Value<String?>? syncedTitle,
+    Value<String?>? syncedContent,
+    Value<String?>? syncedBackground,
+    Value<String?>? syncedState,
     Value<String?>? reminderAt,
     Value<String?>? reminderRecurrence,
     Value<int?>? reminderVersion,
@@ -1183,6 +1383,10 @@ class NotesCompanion extends UpdateCompanion<Note> {
       version: version ?? this.version,
       localRev: localRev ?? this.localRev,
       isPinSynced: isPinSynced ?? this.isPinSynced,
+      syncedTitle: syncedTitle ?? this.syncedTitle,
+      syncedContent: syncedContent ?? this.syncedContent,
+      syncedBackground: syncedBackground ?? this.syncedBackground,
+      syncedState: syncedState ?? this.syncedState,
       reminderAt: reminderAt ?? this.reminderAt,
       reminderRecurrence: reminderRecurrence ?? this.reminderRecurrence,
       reminderVersion: reminderVersion ?? this.reminderVersion,
@@ -1236,6 +1440,18 @@ class NotesCompanion extends UpdateCompanion<Note> {
     }
     if (isPinSynced.present) {
       map['is_pin_synced'] = Variable<bool>(isPinSynced.value);
+    }
+    if (syncedTitle.present) {
+      map['synced_title'] = Variable<String>(syncedTitle.value);
+    }
+    if (syncedContent.present) {
+      map['synced_content'] = Variable<String>(syncedContent.value);
+    }
+    if (syncedBackground.present) {
+      map['synced_background'] = Variable<String>(syncedBackground.value);
+    }
+    if (syncedState.present) {
+      map['synced_state'] = Variable<String>(syncedState.value);
     }
     if (reminderAt.present) {
       map['reminder_at'] = Variable<String>(reminderAt.value);
@@ -1293,6 +1509,10 @@ class NotesCompanion extends UpdateCompanion<Note> {
           ..write('version: $version, ')
           ..write('localRev: $localRev, ')
           ..write('isPinSynced: $isPinSynced, ')
+          ..write('syncedTitle: $syncedTitle, ')
+          ..write('syncedContent: $syncedContent, ')
+          ..write('syncedBackground: $syncedBackground, ')
+          ..write('syncedState: $syncedState, ')
           ..write('reminderAt: $reminderAt, ')
           ..write('reminderRecurrence: $reminderRecurrence, ')
           ..write('reminderVersion: $reminderVersion, ')
@@ -4207,6 +4427,10 @@ typedef $$NotesTableCreateCompanionBuilder =
       Value<int?> version,
       Value<int> localRev,
       Value<bool> isPinSynced,
+      Value<String?> syncedTitle,
+      Value<String?> syncedContent,
+      Value<String?> syncedBackground,
+      Value<String?> syncedState,
       Value<String?> reminderAt,
       Value<String?> reminderRecurrence,
       Value<int?> reminderVersion,
@@ -4234,6 +4458,10 @@ typedef $$NotesTableUpdateCompanionBuilder =
       Value<int?> version,
       Value<int> localRev,
       Value<bool> isPinSynced,
+      Value<String?> syncedTitle,
+      Value<String?> syncedContent,
+      Value<String?> syncedBackground,
+      Value<String?> syncedState,
       Value<String?> reminderAt,
       Value<String?> reminderRecurrence,
       Value<int?> reminderVersion,
@@ -4313,6 +4541,26 @@ class $$NotesTableFilterComposer extends Composer<_$AppDatabase, $NotesTable> {
 
   ColumnFilters<bool> get isPinSynced => $composableBuilder(
     column: $table.isPinSynced,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get syncedTitle => $composableBuilder(
+    column: $table.syncedTitle,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get syncedContent => $composableBuilder(
+    column: $table.syncedContent,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get syncedBackground => $composableBuilder(
+    column: $table.syncedBackground,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get syncedState => $composableBuilder(
+    column: $table.syncedState,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -4441,6 +4689,26 @@ class $$NotesTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<String> get syncedTitle => $composableBuilder(
+    column: $table.syncedTitle,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get syncedContent => $composableBuilder(
+    column: $table.syncedContent,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get syncedBackground => $composableBuilder(
+    column: $table.syncedBackground,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get syncedState => $composableBuilder(
+    column: $table.syncedState,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<String> get reminderAt => $composableBuilder(
     column: $table.reminderAt,
     builder: (column) => ColumnOrderings(column),
@@ -4548,6 +4816,26 @@ class $$NotesTableAnnotationComposer
     builder: (column) => column,
   );
 
+  GeneratedColumn<String> get syncedTitle => $composableBuilder(
+    column: $table.syncedTitle,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get syncedContent => $composableBuilder(
+    column: $table.syncedContent,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get syncedBackground => $composableBuilder(
+    column: $table.syncedBackground,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get syncedState => $composableBuilder(
+    column: $table.syncedState,
+    builder: (column) => column,
+  );
+
   GeneratedColumn<String> get reminderAt => $composableBuilder(
     column: $table.reminderAt,
     builder: (column) => column,
@@ -4642,6 +4930,10 @@ class $$NotesTableTableManager
                 Value<int?> version = const Value.absent(),
                 Value<int> localRev = const Value.absent(),
                 Value<bool> isPinSynced = const Value.absent(),
+                Value<String?> syncedTitle = const Value.absent(),
+                Value<String?> syncedContent = const Value.absent(),
+                Value<String?> syncedBackground = const Value.absent(),
+                Value<String?> syncedState = const Value.absent(),
                 Value<String?> reminderAt = const Value.absent(),
                 Value<String?> reminderRecurrence = const Value.absent(),
                 Value<int?> reminderVersion = const Value.absent(),
@@ -4667,6 +4959,10 @@ class $$NotesTableTableManager
                 version: version,
                 localRev: localRev,
                 isPinSynced: isPinSynced,
+                syncedTitle: syncedTitle,
+                syncedContent: syncedContent,
+                syncedBackground: syncedBackground,
+                syncedState: syncedState,
                 reminderAt: reminderAt,
                 reminderRecurrence: reminderRecurrence,
                 reminderVersion: reminderVersion,
@@ -4694,6 +4990,10 @@ class $$NotesTableTableManager
                 Value<int?> version = const Value.absent(),
                 Value<int> localRev = const Value.absent(),
                 Value<bool> isPinSynced = const Value.absent(),
+                Value<String?> syncedTitle = const Value.absent(),
+                Value<String?> syncedContent = const Value.absent(),
+                Value<String?> syncedBackground = const Value.absent(),
+                Value<String?> syncedState = const Value.absent(),
                 Value<String?> reminderAt = const Value.absent(),
                 Value<String?> reminderRecurrence = const Value.absent(),
                 Value<int?> reminderVersion = const Value.absent(),
@@ -4719,6 +5019,10 @@ class $$NotesTableTableManager
                 version: version,
                 localRev: localRev,
                 isPinSynced: isPinSynced,
+                syncedTitle: syncedTitle,
+                syncedContent: syncedContent,
+                syncedBackground: syncedBackground,
+                syncedState: syncedState,
                 reminderAt: reminderAt,
                 reminderRecurrence: reminderRecurrence,
                 reminderVersion: reminderVersion,

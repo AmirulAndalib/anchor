@@ -108,6 +108,7 @@ void main() {
     String id, {
     String title = 'Server title',
     String? content,
+    String? background,
     int version = 2,
     String state = 'active',
     String permission = 'owner',
@@ -124,7 +125,7 @@ void main() {
       'version': version,
       'isPinned': isPinned,
       'isArchived': false,
-      'background': null,
+      'background': background,
       'state': state,
       'updatedAt': '2026-08-15T10:00:00.000Z',
       'createdAt': '2026-08-15T09:00:00.000Z',
@@ -181,6 +182,13 @@ void main() {
     bool isPinned = false,
     bool isPinSynced = true,
     String permission = 'owner',
+    String? background,
+    bool isArchived = false,
+    bool hasSyncedCopy = false,
+    String? syncedTitle,
+    String? syncedContent,
+    String? syncedBackground,
+    String? syncedState,
   }) {
     return db
         .into(db.notes)
@@ -189,6 +197,20 @@ void main() {
             id: id,
             title: title,
             content: Value(content),
+            background: Value(background),
+            isArchived: Value(isArchived),
+            syncedTitle: Value(
+              hasSyncedCopy ? syncedTitle ?? title : syncedTitle,
+            ),
+            syncedContent: Value(
+              hasSyncedCopy ? syncedContent ?? content : syncedContent,
+            ),
+            syncedBackground: Value(
+              hasSyncedCopy ? syncedBackground ?? background : syncedBackground,
+            ),
+            syncedState: Value(
+              hasSyncedCopy ? syncedState ?? state : syncedState,
+            ),
             isSynced: Value(isSynced),
             version: Value(version),
             localRev: Value(localRev),
@@ -558,6 +580,263 @@ void main() {
     expect(kept.title, 'Mine');
     expect(kept.cause, 'conflict');
     expect(kept.isSynced, isTrue);
+  });
+
+  group('a conflict keeps only what changed on this device', () {
+    Map<String, dynamic> conflict(Map<String, dynamic> serverNote) => response(
+      results: [
+        {
+          'type': 'note',
+          'id': serverNote['id'],
+          'status': 'conflict',
+          'serverCopy': serverNote,
+        },
+      ],
+    );
+
+    Map<String, dynamic> applied(String id, int version) => response(
+      results: [
+        {'type': 'note', 'id': id, 'status': 'applied', 'version': version},
+      ],
+    );
+
+    test('an archive made here takes the newer text from elsewhere', () async {
+      await insertNote(
+        id: 'n1',
+        title: 'Shopping',
+        content: 'milk',
+        version: 3,
+        isArchived: true,
+        hasSyncedCopy: true,
+      );
+      stub([
+        conflict(
+          serverNoteJson(
+            'n1',
+            title: 'Shopping',
+            content: 'milk, eggs',
+            version: 7,
+          ),
+        ),
+        applied('n1', 7),
+      ]);
+
+      await service.run();
+
+      final resent = changesOf(1).single;
+      expect(resent['baseVersion'], 7);
+      expect(resent['content'], 'milk, eggs');
+      expect(resent['isArchived'], isTrue);
+
+      final row = await note('n1');
+      expect(row!.content, 'milk, eggs');
+      expect(row.isArchived, isTrue);
+      expect(row.isSynced, isTrue);
+      expect(row.updatedAt!.toUtc(), DateTime.utc(2026, 8, 15, 10));
+    });
+
+    test(
+      'a title changed here stays while the text takes the server\'s',
+      () async {
+        await insertNote(
+          id: 'n1',
+          title: 'Weekly shop',
+          content: 'milk',
+          version: 3,
+          hasSyncedCopy: true,
+          syncedTitle: 'Shopping',
+        );
+        stub([
+          conflict(
+            serverNoteJson(
+              'n1',
+              title: 'Shopping',
+              content: 'milk, eggs',
+              version: 7,
+            ),
+          ),
+          applied('n1', 8),
+        ]);
+
+        await service.run();
+
+        final resent = changesOf(1).single;
+        expect(resent['title'], 'Weekly shop');
+        expect(resent['content'], 'milk, eggs');
+
+        final row = await note('n1');
+        expect(row!.title, 'Weekly shop');
+        expect(row.content, 'milk, eggs');
+        expect(row.syncedTitle, 'Weekly shop');
+        expect(row.syncedContent, 'milk, eggs');
+      },
+    );
+
+    test(
+      'a color changed here stays while the text takes the server\'s',
+      () async {
+        await insertNote(
+          id: 'n1',
+          title: 'Shopping',
+          content: 'milk',
+          background: 'color_teal',
+          version: 3,
+          hasSyncedCopy: true,
+          syncedBackground: 'color_red',
+        );
+        stub([
+          conflict(
+            serverNoteJson(
+              'n1',
+              title: 'Shopping',
+              content: 'milk, eggs',
+              background: 'color_red',
+              version: 7,
+            ),
+          ),
+          applied('n1', 8),
+        ]);
+
+        await service.run();
+
+        final resent = changesOf(1).single;
+        expect(resent['background'], 'color_teal');
+        expect(resent['content'], 'milk, eggs');
+      },
+    );
+
+    test('a note trashed elsewhere stays trashed when this device only tagged '
+        'it', () async {
+      await insertNote(
+        id: 'n1',
+        title: 'Shopping',
+        content: 'milk',
+        version: 3,
+        hasSyncedCopy: true,
+      );
+      stub([
+        conflict(
+          serverNoteJson(
+            'n1',
+            title: 'Shopping',
+            content: 'milk',
+            state: 'trashed',
+            version: 4,
+          ),
+        ),
+        applied('n1', 4),
+      ]);
+
+      await service.run();
+
+      expect(changesOf(1).single['state'], 'trashed');
+      expect((await note('n1'))!.state, 'trashed');
+    });
+
+    test(
+      'a note trashed here stays trashed and takes the server\'s text',
+      () async {
+        await insertNote(
+          id: 'n1',
+          title: 'Shopping',
+          content: 'milk',
+          state: 'trashed',
+          version: 3,
+          hasSyncedCopy: true,
+          syncedState: 'active',
+        );
+        stub([
+          conflict(
+            serverNoteJson(
+              'n1',
+              title: 'Shopping',
+              content: 'milk, eggs',
+              version: 7,
+            ),
+          ),
+          applied('n1', 8),
+        ]);
+
+        await service.run();
+
+        final resent = changesOf(1).single;
+        expect(resent['state'], 'trashed');
+        expect(resent['content'], 'milk, eggs');
+      },
+    );
+
+    test('an accepted push becomes the synced copy', () async {
+      await insertNote(
+        id: 'n1',
+        title: 'Shopping',
+        content: 'milk',
+        version: 3,
+      );
+      stub([applied('n1', 4)]);
+
+      await service.run();
+
+      final row = await note('n1');
+      expect(row!.syncedTitle, 'Shopping');
+      expect(row.syncedContent, 'milk');
+      expect(row.syncedState, 'active');
+    });
+
+    test('a note from the feed becomes the synced copy', () async {
+      stub([
+        response(
+          entries: [
+            noteEntry(
+              serverNoteJson(
+                'n1',
+                title: 'Shopping',
+                content: 'milk',
+                background: 'color_teal',
+              ),
+            ),
+          ],
+          nextCursor: 'cursor-1',
+        ),
+      ]);
+
+      await service.run();
+
+      final row = await note('n1');
+      expect(row!.syncedTitle, 'Shopping');
+      expect(row.syncedContent, 'milk');
+      expect(row.syncedBackground, 'color_teal');
+      expect(row.syncedState, 'active');
+    });
+
+    test(
+      'a viewer whose text never changed here keeps no conflict version',
+      () async {
+        await insertNote(
+          id: 'n1',
+          title: 'Trip plan',
+          content: 'book hotel',
+          version: 3,
+          permission: 'viewer',
+          hasSyncedCopy: true,
+        );
+        stub([
+          conflict(
+            serverNoteJson(
+              'n1',
+              title: 'Trip plan',
+              content: 'book hotel, rent car',
+              version: 7,
+              permission: 'viewer',
+            ),
+          ),
+        ]);
+
+        await service.run();
+
+        expect((await note('n1'))!.content, 'book hotel, rent car');
+        expect(await db.select(db.noteRevisions).get(), isEmpty);
+      },
+    );
   });
 
   test('a denied push drops the note instead of recreating it', () async {

@@ -308,6 +308,10 @@ class SyncService {
             NotesCompanion(
               version: Value(result.version),
               isSynced: Value(row.localRev == change.localRev),
+              syncedTitle: Value(change.title),
+              syncedContent: Value(change.content),
+              syncedBackground: Value(change.background),
+              syncedState: Value.absentIfNull(change.state),
             ),
           );
         }
@@ -332,6 +336,7 @@ class SyncService {
           final prior = await _noteRow(result.id);
           if (prior != null &&
               !prior.isSynced &&
+              _textChangedHere(prior) &&
               (prior.title != server.title ||
                   prior.content != server.content)) {
             // Local-only: the server refuses history from a viewer.
@@ -344,14 +349,9 @@ class SyncService {
           await _upsertServerNote(server, force: true);
           return;
         }
-        // Re-send the local text on top of the server's version.
-        await _writeNote(
-          result.id,
-          _sharingOf(server).copyWith(
-            version: Value(server.version),
-            isSynced: const Value(false),
-          ),
-        );
+        final prior = await _noteRow(result.id);
+        if (prior == null) return;
+        await _writeNote(result.id, _rebasedOnto(prior, server));
         final row = await _noteRow(result.id);
         if (row != null) rebased.add(await _noteChangeOf(row));
 
@@ -593,6 +593,10 @@ class SyncService {
             updatedAt: Value(note.updatedAt),
             version: Value(note.version),
             isSynced: const Value(true),
+            syncedTitle: Value(note.title),
+            syncedContent: Value(note.content),
+            syncedBackground: Value(note.background),
+            syncedState: Value(note.state),
             reminderAt: serverReminder.reminderAt,
             reminderRecurrence: serverReminder.reminderRecurrence,
             reminderVersion: serverReminder.reminderVersion,
@@ -601,6 +605,37 @@ class SyncService {
           ),
         );
     await _setNoteTags(note.id, note.tagIds);
+  }
+
+  /// Moves [row] onto the server's newer copy, keeping only the fields
+  /// changed on this device.
+  NotesCompanion _rebasedOnto(Note row, SyncServerNote server) {
+    bool changedHere(Object? local, Object? synced) =>
+        !_hasSyncedCopy(row) || local != synced;
+
+    final keepTitle = changedHere(row.title, row.syncedTitle);
+    final keepContent = changedHere(row.content, row.syncedContent);
+    final keepBackground = changedHere(row.background, row.syncedBackground);
+    final keepState = changedHere(row.state, row.syncedState);
+    final keepsAny = keepTitle || keepContent || keepBackground || keepState;
+
+    return _sharingOf(server).copyWith(
+      title: keepTitle ? const Value.absent() : Value(server.title),
+      content: keepContent ? const Value.absent() : Value(server.content),
+      background: keepBackground
+          ? const Value.absent()
+          : Value(server.background),
+      state: keepState ? const Value.absent() : Value(server.state),
+      updatedAt: keepsAny
+          ? const Value.absent()
+          : Value.absentIfNull(server.updatedAt),
+      version: Value(server.version),
+      isSynced: const Value(false),
+      syncedTitle: Value(server.title),
+      syncedContent: Value(server.content),
+      syncedBackground: Value(server.background),
+      syncedState: Value(server.state),
+    );
   }
 
   NotesCompanion _sharingOf(SyncServerNote note) => NotesCompanion(
@@ -858,3 +893,10 @@ class SyncService {
     }
   }
 }
+
+bool _hasSyncedCopy(Note row) => row.syncedTitle != null;
+
+bool _textChangedHere(Note row) =>
+    !_hasSyncedCopy(row) ||
+    row.title != row.syncedTitle ||
+    row.content != row.syncedContent;

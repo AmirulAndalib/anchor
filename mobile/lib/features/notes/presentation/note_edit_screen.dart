@@ -631,8 +631,8 @@ class _NoteEditScreenState extends ConsumerState<NoteEditScreen>
       );
 
       final updatedNote = _existingNote!.copyWith(
-        title: title,
-        content: content,
+        title: titleChanged ? title : _existingNote!.title,
+        content: contentChanged ? content : _existingNote!.content,
         isPinned: _isPinned,
         isArchived: _isArchived,
         tagIds: _selectedTagIds,

@@ -19,6 +19,12 @@ void main() {
 
   tearDown(() => dir.delete(recursive: true));
 
+  Future<void> dropColumns(AppDatabase db, List<String> columns) async {
+    for (final column in columns) {
+      await db.customStatement('ALTER TABLE notes DROP COLUMN $column');
+    }
+  }
+
   Future<void> withDatabase(Future<void> Function(AppDatabase db) body) async {
     final db = AppDatabase.forTesting(NativeDatabase(file));
     try {
@@ -34,9 +40,7 @@ void main() {
       await withDatabase((db) async {
         await db.customStatement('DROP TABLE note_revisions');
         await db.customStatement('DROP TABLE note_history_state');
-        for (final column in _reminderColumns) {
-          await db.customStatement('ALTER TABLE notes DROP COLUMN $column');
-        }
+        await dropColumns(db, [..._reminderColumns, ..._syncedCopyColumns]);
         await db.customStatement('PRAGMA user_version = 8');
       });
 
@@ -85,9 +89,7 @@ void main() {
               localRev: const Value(4),
             ),
           );
-      for (final column in _reminderColumns) {
-        await db.customStatement('ALTER TABLE notes DROP COLUMN $column');
-      }
+      await dropColumns(db, [..._reminderColumns, ..._syncedCopyColumns]);
       await db.customStatement('PRAGMA user_version = 9');
     });
 
@@ -113,6 +115,7 @@ void main() {
         await db
             .into(db.syncState)
             .insert(const SyncStateCompanion(cursor: Value('cursor-42')));
+        await dropColumns(db, _syncedCopyColumns);
         await db.customStatement('PRAGMA user_version = 10');
       });
 
@@ -123,14 +126,69 @@ void main() {
     },
   );
 
+  test(
+    'a database from the first reminders release gives synced notes a synced '
+    'copy',
+    () async {
+      await withDatabase((db) async {
+        await db
+            .into(db.notes)
+            .insert(
+              NotesCompanion.insert(
+                id: 'synced',
+                title: 'Groceries',
+                content: const Value('milk'),
+                background: const Value('color_teal'),
+                isSynced: const Value(true),
+                version: const Value(4),
+              ),
+            );
+        await db
+            .into(db.notes)
+            .insert(
+              NotesCompanion.insert(
+                id: 'waiting',
+                title: 'Trip',
+                isSynced: const Value(false),
+                version: const Value(2),
+              ),
+            );
+        await db
+            .into(db.notes)
+            .insert(
+              NotesCompanion.insert(
+                id: 'new',
+                title: 'Draft',
+                isSynced: const Value(true),
+              ),
+            );
+        await dropColumns(db, _syncedCopyColumns);
+        await db.customStatement('PRAGMA user_version = 10');
+      });
+
+      await withDatabase((db) async {
+        Future<Note> row(String id) => (db.select(
+          db.notes,
+        )..where((tbl) => tbl.id.equals(id))).getSingle();
+
+        final synced = await row('synced');
+        expect(synced.syncedTitle, 'Groceries');
+        expect(synced.syncedContent, 'milk');
+        expect(synced.syncedBackground, 'color_teal');
+        expect(synced.syncedState, 'active');
+
+        expect((await row('waiting')).syncedTitle, isNull);
+        expect((await row('new')).syncedTitle, isNull);
+      });
+    },
+  );
+
   test('a database from before reminders re-downloads the feed too', () async {
     await withDatabase((db) async {
       await db
           .into(db.syncState)
           .insert(const SyncStateCompanion(cursor: Value('cursor-42')));
-      for (final column in _reminderColumns) {
-        await db.customStatement('ALTER TABLE notes DROP COLUMN $column');
-      }
+      await dropColumns(db, [..._reminderColumns, ..._syncedCopyColumns]);
       await db.customStatement('PRAGMA user_version = 9');
     });
 
@@ -140,6 +198,13 @@ void main() {
     });
   });
 }
+
+const _syncedCopyColumns = [
+  'synced_title',
+  'synced_content',
+  'synced_background',
+  'synced_state',
+];
 
 const _reminderColumns = [
   'reminder_at',

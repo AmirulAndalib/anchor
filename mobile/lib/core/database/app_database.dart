@@ -87,6 +87,22 @@ class AppDatabase extends _$AppDatabase {
         await m.addColumn(notes, notes.reminderSlot);
       }
       if (from < 11) {
+        await m.addColumn(notes, notes.syncedTitle);
+        await m.addColumn(notes, notes.syncedContent);
+        await m.addColumn(notes, notes.syncedBackground);
+        await m.addColumn(notes, notes.syncedState);
+        await (update(notes)..where(
+              (tbl) => tbl.isSynced.equals(true) & tbl.version.isNotNull(),
+            ))
+            .write(
+              NotesCompanion.custom(
+                syncedTitle: notes.title,
+                syncedContent: notes.content,
+                syncedBackground: notes.background,
+                syncedState: notes.state,
+              ),
+            );
+
         // The server sends each feed entry once; only a sync with no cursor
         // repeats them.
         await (update(syncState)..where((tbl) => tbl.cursor.isNotNull())).write(

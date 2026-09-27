@@ -18,6 +18,12 @@ class Notes extends Table {
   // A pin belongs to the person, not the note, so it syncs on its own.
   BoolColumn get isPinSynced => boolean().withDefault(const Constant(true))();
 
+  // The note as the server last confirmed it; null until confirmed.
+  TextColumn get syncedTitle => text().nullable()();
+  TextColumn get syncedContent => text().nullable()();
+  TextColumn get syncedBackground => text().nullable()();
+  TextColumn get syncedState => text().nullable()();
+
   // A local wall clock ("YYYY-MM-DDTHH:mm"), not an instant.
   TextColumn get reminderAt => text().nullable()();
   TextColumn get reminderRecurrence => text().nullable()();

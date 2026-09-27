@@ -22,16 +22,15 @@ export type SaveOutcome =
 
 export type SaveFailure = Extract<SaveOutcome, { status: "failed" }>;
 
-export type ConflictResolution = "retry" | "adopt";
-
 export interface NoteSaveQueueHandlers {
   save: (draft: NoteDraft, baseVersion?: number) => Promise<SaveOutcome>;
   onSaved: (draft: NoteDraft, note: Note) => void;
+  /** Returns the draft to send on the server's version, or null to stop. */
   onConflict: (
     serverNote: Note,
     draft: NoteDraft,
     canRetry: boolean,
-  ) => ConflictResolution;
+  ) => NoteDraft | null;
   onFailed: (failure: SaveFailure, draft: NoteDraft) => void;
   onBusyChange?: (busy: boolean) => void;
   retryDelayMs?: number;
@@ -58,15 +57,62 @@ export function noteToDraft(note: Note): NoteDraft {
   };
 }
 
+const draftFields = [
+  "title",
+  "content",
+  "isPinned",
+  "background",
+  "tagIds",
+  "reminder",
+] as const;
+
+type DraftField = (typeof draftFields)[number];
+
+function sameField(field: DraftField, a: NoteDraft, b: NoteDraft): boolean {
+  switch (field) {
+    case "tagIds":
+      return (
+        a.tagIds.length === b.tagIds.length &&
+        [...a.tagIds].sort().join() === [...b.tagIds].sort().join()
+      );
+    case "reminder":
+      return sameReminder(a.reminder, b.reminder);
+    default:
+      return a[field] === b[field];
+  }
+}
+
 export function noteDraftsEqual(a: NoteDraft, b: NoteDraft): boolean {
-  return (
-    a.title === b.title &&
-    a.content === b.content &&
-    a.isPinned === b.isPinned &&
-    a.background === b.background &&
-    sameReminder(a.reminder, b.reminder) &&
-    a.tagIds.length === b.tagIds.length &&
-    [...a.tagIds].sort().join() === [...b.tagIds].sort().join()
+  return draftFields.every((field) => sameField(field, a, b));
+}
+
+/** Moves a draft onto a newer server copy, keeping the fields changed since [base]. */
+export function rebaseDraft(
+  draft: NoteDraft,
+  base: NoteDraft,
+  server: NoteDraft,
+): NoteDraft {
+  const pick = <K extends DraftField>(field: K): NoteDraft[K] =>
+    sameField(field, draft, base) ? server[field] : draft[field];
+
+  return {
+    title: pick("title"),
+    content: pick("content"),
+    isPinned: pick("isPinned"),
+    background: pick("background"),
+    tagIds: pick("tagIds"),
+    reminder: pick("reminder"),
+  };
+}
+
+/** Whether [draft] replaces text the server changed since [base]. */
+export function replacesText(
+  draft: NoteDraft,
+  base: NoteDraft,
+  server: NoteDraft,
+): boolean {
+  return (["title", "content"] as const).some(
+    (field) => server[field] !== base[field] && draft[field] !== server[field],
   );
 }
 
@@ -105,6 +151,22 @@ export function draftUpdate(
     return { isPinned: draft.isPinned, tagIds: draft.tagIds, reminder };
   }
   return { ...draft, reminder, baseVersion };
+}
+
+// The save sent as the page closes: only the fields changed since [base].
+export function flushUpdate(
+  draft: NoteDraft,
+  base: NoteDraft,
+  serverReminder: NoteReminder | null,
+  { isViewer }: { isViewer: boolean },
+): UpdateNoteDto {
+  const update = draftUpdate(draft, serverReminder, { isViewer });
+  return Object.fromEntries(
+    Object.entries(update).filter(
+      ([field]) =>
+        field === "reminder" || !sameField(field as DraftField, draft, base),
+    ),
+  );
 }
 
 // Holds one request open at a time and remembers only the newest draft, so
@@ -168,14 +230,8 @@ export function createNoteSaveQueue(
         baseVersion = outcome.serverNote.version;
         conflicts += 1;
         const canRetry = conflicts <= maxConflictRetries;
-        const resolution = handlers.onConflict(
-          outcome.serverNote,
-          draft,
-          canRetry,
-        );
-        if (resolution === "retry" && canRetry && !pending) {
-          pending = draft;
-        }
+        const next = handlers.onConflict(outcome.serverNote, draft, canRetry);
+        pending = canRetry ? next : null;
       })
       .catch(() => {
         fail({ status: "failed", httpStatus: null, retryable: false }, draft);

@@ -2,11 +2,14 @@ import { describe, expect, it, vi } from "vitest";
 import {
   createNoteSaveQueue,
   draftUpdate,
+  flushUpdate,
   type NoteDraft,
   type NoteSaveQueueHandlers,
   noteDraftsEqual,
   noteToDraft,
+  rebaseDraft,
   reminderUpdate,
+  replacesText,
   type SaveFailure,
   type SaveOutcome,
 } from "./save-queue";
@@ -47,7 +50,7 @@ function makeQueue(handlers: Partial<NoteSaveQueueHandlers> = {}) {
   return createNoteSaveQueue({
     save: () => Promise.resolve({ status: "saved", note: makeNote(2) }),
     onSaved: () => {},
-    onConflict: () => "retry",
+    onConflict: (_serverNote, draft) => draft,
     onFailed: () => {},
     ...handlers,
   });
@@ -202,6 +205,136 @@ describe("draftUpdate", () => {
   });
 });
 
+describe("rebaseDraft", () => {
+  const base: NoteDraft = {
+    title: "Shopping",
+    content: "milk",
+    isPinned: false,
+    background: null,
+    tagIds: ["t1"],
+    reminder: null,
+  };
+  const server: NoteDraft = {
+    ...base,
+    content: "milk, eggs",
+    background: "color_red",
+  };
+
+  it("takes the server's value for everything left alone here", () => {
+    expect(rebaseDraft({ ...base, isPinned: true }, base, server)).toEqual({
+      ...server,
+      isPinned: true,
+    });
+  });
+
+  it("keeps every field changed here", () => {
+    const mine = {
+      ...base,
+      title: "Weekly shop",
+      content: "bread",
+      background: "color_teal",
+    };
+
+    expect(rebaseDraft(mine, base, server)).toEqual(mine);
+  });
+
+  it("sees tags picked in another order as untouched", () => {
+    const base2 = { ...base, tagIds: ["t1", "t2"] };
+    const mine = { ...base, tagIds: ["t2", "t1"] };
+
+    expect(
+      rebaseDraft(mine, base2, { ...base2, tagIds: ["t3"] }).tagIds,
+    ).toEqual(["t3"]);
+  });
+
+  it("keeps a reminder set here and takes one set elsewhere", () => {
+    const reminder = {
+      remindAt: "2026-09-04T09:00",
+      recurrence: "none" as const,
+      version: 1,
+    };
+
+    expect(rebaseDraft({ ...base, reminder }, base, server).reminder).toEqual(
+      reminder,
+    );
+    expect(rebaseDraft(base, base, { ...server, reminder }).reminder).toEqual(
+      reminder,
+    );
+  });
+});
+
+describe("replacesText", () => {
+  const base: NoteDraft = {
+    title: "Shopping",
+    content: "milk",
+    isPinned: false,
+    background: null,
+    tagIds: [],
+    reminder: null,
+  };
+
+  it("is true when both sides changed the text", () => {
+    const server = { ...base, content: "milk, eggs" };
+
+    expect(replacesText({ ...base, content: "bread" }, base, server)).toBe(
+      true,
+    );
+  });
+
+  it("is false when the other side changed only the color", () => {
+    const server = { ...base, background: "color_red" };
+    const next = rebaseDraft({ ...base, content: "bread" }, base, server);
+
+    expect(replacesText(next, base, server)).toBe(false);
+  });
+
+  it("is false when each side changed a different part of the text", () => {
+    const server = { ...base, content: "milk, eggs" };
+    const next = rebaseDraft({ ...base, title: "Weekly shop" }, base, server);
+
+    expect(replacesText(next, base, server)).toBe(false);
+  });
+});
+
+describe("flushUpdate", () => {
+  const base: NoteDraft = {
+    title: "Shopping",
+    content: "milk",
+    isPinned: false,
+    background: null,
+    tagIds: [],
+    reminder: null,
+  };
+
+  it("sends only what changed since the last save, with no base version", () => {
+    expect(
+      flushUpdate({ ...base, isPinned: true }, base, null, { isViewer: false }),
+    ).toEqual({ isPinned: true });
+  });
+
+  it("sends changed text so it is not lost", () => {
+    expect(
+      flushUpdate({ ...base, content: "milk, eggs" }, base, null, {
+        isViewer: false,
+      }),
+    ).toEqual({ content: "milk, eggs" });
+  });
+
+  it("sends a reminder only when it differs from the server's", () => {
+    const reminder = {
+      remindAt: "2026-09-04T09:00",
+      recurrence: "none" as const,
+      version: 1,
+    };
+
+    expect(
+      flushUpdate({ ...base, reminder }, base, null, { isViewer: false }),
+    ).toEqual({
+      reminder: { remindAt: "2026-09-04T09:00", recurrence: "none" },
+    });
+  });
+});
+
 describe("createNoteSaveQueue", () => {
   it("sends only the newest edit made while a save is running", async () => {
     const gate = deferred<SaveOutcome>();
@@ -290,7 +423,7 @@ describe("createNoteSaveQueue", () => {
     ]);
   });
 
-  it("keeps a newer edit instead of re-sending the one that conflicted", async () => {
+  it("replaces an edit queued on the old copy with what the conflict hands back", async () => {
     const gate = deferred<SaveOutcome>();
     const sent: string[] = [];
     const queue = makeQueue({
@@ -300,6 +433,7 @@ describe("createNoteSaveQueue", () => {
           ? gate.promise
           : Promise.resolve({ status: "saved", note: makeNote(10) });
       },
+      onConflict: () => makeDraft("merged"),
     });
 
     queue.push(makeDraft("a"));
@@ -307,7 +441,46 @@ describe("createNoteSaveQueue", () => {
     gate.resolve({ status: "conflict", serverNote: makeNote(9) });
     await queue.settled();
 
-    expect(sent).toEqual(["a", "b"]);
+    expect(sent).toEqual(["a", "merged"]);
+  });
+
+  it("sends the draft the conflict hands back", async () => {
+    const sent: NoteDraft[] = [];
+    const queue = makeQueue({
+      save: (draft) => {
+        sent.push(draft);
+        return Promise.resolve(
+          sent.length === 1
+            ? { status: "conflict", serverNote: makeNote(9) }
+            : { status: "saved", note: makeNote(10) },
+        );
+      },
+      onConflict: (_serverNote, draft) => ({ ...draft, content: "theirs" }),
+    });
+
+    queue.push(makeDraft("mine"));
+    await queue.settled();
+
+    expect(sent[1]).toMatchObject({ title: "mine", content: "theirs" });
+  });
+
+  it("drops a newer edit once the server copy is adopted", async () => {
+    const gate = deferred<SaveOutcome>();
+    const sent: string[] = [];
+    const queue = makeQueue({
+      save: (draft) => {
+        sent.push(draft.title);
+        return gate.promise;
+      },
+      onConflict: () => null,
+    });
+
+    queue.push(makeDraft("a"));
+    queue.push(makeDraft("b"));
+    gate.resolve({ status: "conflict", serverNote: makeNote(9) });
+    await queue.settled();
+
+    expect(sent).toEqual(["a"]);
   });
 
   it("stops re-sending once the server keeps winning", async () => {
@@ -321,9 +494,9 @@ describe("createNoteSaveQueue", () => {
           serverNote: makeNote(attempts),
         });
       },
-      onConflict: (_serverNote, _draft, canRetry) => {
+      onConflict: (_serverNote, draft, canRetry) => {
         offers.push(canRetry);
-        return canRetry ? "retry" : "adopt";
+        return canRetry ? draft : null;
       },
     });
 
@@ -344,7 +517,7 @@ describe("createNoteSaveQueue", () => {
           serverNote: makeNote(9),
         });
       },
-      onConflict: () => "adopt",
+      onConflict: () => null,
     });
 
     queue.push(makeDraft("mine"));
